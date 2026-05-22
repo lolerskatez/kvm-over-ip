@@ -19,12 +19,15 @@ services:
       
       # Session data (persistent)
       - kvm-data:/var/lib/kvm
-      
-      # Device access for USB/video capture (adjust as needed)
-      # Uncomment if using USB devices (HID, video capture, etc.)
+    
+    # USB and video device access (uncomment for hardware deployment)
+    devices:
       - /dev/bus/usb:/dev/bus/usb
-      - /dev/video0:/dev/video0
-      - /dev/video1:/dev/video1
+      # - /dev/video0:/dev/video0     # Video capture device
+      # - /dev/video1:/dev/video1     # Additional video device
+    
+    # Required for USB device access
+    privileged: true
     
     environment:
       # Container flag (disables user switching in gunicorn)
@@ -53,7 +56,8 @@ services:
     #       cpus: '1'
     #       memory: 512M
     
-    # Uncomment to use host networking (for better device access)
+    # Note: host networking disabled - Docker bridge networking is more portable
+    # Uncomment below only if you need direct host access (not recommended for production)
     # network_mode: host
     
     # Healthcheck
