@@ -9,7 +9,11 @@ from pathlib import Path
 ETC_KVM = Path('/etc/kvm').exists()
 
 # Server socket
-bind = '127.0.0.1:5000'  # Listen on localhost only (Nginx proxies)
+# For Docker: bind to all interfaces. For system install with Nginx: bind to localhost.
+if os.getenv('CONTAINER'):
+    bind = '0.0.0.0:8000'  # Docker: listen on all interfaces
+else:
+    bind = '127.0.0.1:5000'  # System: listen on localhost only (Nginx proxies)
 backlog = 2048
 
 # Worker processes
