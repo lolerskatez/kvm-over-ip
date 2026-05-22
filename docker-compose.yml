@@ -22,9 +22,9 @@ services:
       
       # Device access for USB/video capture (adjust as needed)
       # Uncomment if using USB devices (HID, video capture, etc.)
-      # - /dev/bus/usb:/dev/bus/usb
-      # - /dev/video0:/dev/video0
-      # - /dev/video1:/dev/video1
+       - /dev/bus/usb:/dev/bus/usb
+       - /dev/video0:/dev/video0
+       - /dev/video1:/dev/video1
     
     environment:
       # Container flag (disables user switching in gunicorn)
