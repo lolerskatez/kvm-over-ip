@@ -24,8 +24,13 @@ keepalive = 5
 proc_name = 'kvm-over-ip'
 
 # Logging
-accesslog = '/var/log/kvm-over-ip/gunicorn_access.log' if ETC_KVM else './logs/gunicorn_access.log'
-errorlog = '/var/log/kvm-over-ip/gunicorn_error.log' if ETC_KVM else './logs/gunicorn_error.log'
+# For Docker: log to stdout/stderr. For system install: log to files.
+if os.getenv('CONTAINER'):
+    accesslog = '-'  # stdout
+    errorlog = '-'   # stderr
+else:
+    accesslog = '/var/log/kvm-over-ip/gunicorn_access.log' if ETC_KVM else './logs/gunicorn_access.log'
+    errorlog = '/var/log/kvm-over-ip/gunicorn_error.log' if ETC_KVM else './logs/gunicorn_error.log'
 loglevel = 'info'
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
