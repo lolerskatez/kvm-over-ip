@@ -511,7 +511,7 @@ function tempClass(c) {
 }
 
 function refreshStatus() {
-  fetch('/api/status')
+  fetch('/api/status', { credentials: 'include' })
     .then(r => r.json())
     .then(d => {
       document.getElementById('hidDot').className = 'dot ' + (d.hid_connected ? 'dot-online' : 'dot-offline');
@@ -521,7 +521,7 @@ function refreshStatus() {
 }
 
 function refreshStats() {
-  fetch('/api/system/stats')
+  fetch('/api/system/stats', { credentials: 'include' })
     .then(r => r.json())
     .then(d => {
       // CPU
@@ -671,7 +671,7 @@ function fmtBwLabel(bps) {
 }
 
 function pollVideoStats() {
-  fetch('/api/video/stats')
+  fetch('/api/video/stats', { credentials: 'include' })
     .then(r => r.json())
     .then(d => {
       const bps = d.bandwidth_bps || 0;
