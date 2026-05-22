@@ -30,6 +30,9 @@ services:
       # - /dev/video1:/dev/video1
     
     environment:
+      # Container flag (disables user switching in gunicorn)
+      - CONTAINER=1
+      
       # Set production mode (optional, adjust as needed)
       - PRODUCTION=1
       

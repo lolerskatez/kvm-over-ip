@@ -42,8 +42,10 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"
 daemon = False
 pidfile = '/var/run/kvm-over-ip.pid' if ETC_KVM else None
 umask = 0o022
-user = 'kvm' if ETC_KVM else None
-group = 'kvm' if ETC_KVM else None
+# Don't set user/group when running in Docker (already set via USER directive)
+# Only set when running directly on host with /etc/kvm
+user = 'kvm' if (ETC_KVM and not os.getenv('CONTAINER')) else None
+group = 'kvm' if (ETC_KVM and not os.getenv('CONTAINER')) else None
 
 # Security
 limit_request_line = 4094
