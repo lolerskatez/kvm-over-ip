@@ -1,0 +1,788 @@
+{% extends "base.html" %}
+
+{% block title %}Recordings — KVM-over-IP{% endblock %}
+
+{% block page_title %}Session Recordings{% endblock %}
+
+{% block page_subtitle %}
+<p class="page-subtitle">Browse and replay recorded KVM sessions</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .rec-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: var(--spacing-lg);
+    height: calc(100vh - 200px);
+    min-height: 500px;
+  }
+
+  /* ── List panel ── */
+  .rec-list-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .rec-list-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  .rec-list-body { overflow-y: auto; flex: 1; }
+
+  .rec-item {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: background var(--transition-base);
+  }
+
+  .rec-item:hover            { background: var(--color-bg-secondary); }
+  .rec-item.active           { background: var(--color-primary); color: white; }
+  .rec-item.active .rec-meta { color: rgba(255,255,255,0.7); }
+
+  .rec-item-name {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rec-meta {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+  }
+
+  .rec-empty {
+    padding: var(--spacing-2xl);
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
+  }
+
+  /* ── Player panel ── */
+  .rec-player-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .rec-player-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+
+  .rec-player-title {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--color-text-primary);
+  }
+
+  .rec-player-actions { display: flex; gap: var(--spacing-sm); }
+
+  .rec-player-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .rec-video-area {
+    flex: 1;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .rec-video-area img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+  }
+
+  .rec-placeholder {
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
+    text-align: center;
+    padding: var(--spacing-2xl);
+  }
+
+  /* ── Timeline / scrubber ── */
+  .rec-timeline {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+    flex-shrink: 0;
+  }
+
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .timeline-row input[type=range] {
+    flex: 1;
+    accent-color: var(--color-primary);
+  }
+
+  .timeline-time {
+    font-family: monospace;
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    min-width: 80px;
+  }
+
+  .playback-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+  }
+
+  .speed-select {
+    font-size: var(--text-xs);
+    padding: 3px 6px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+  }
+
+  .frame-counter {
+    font-family: monospace;
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    margin-left: auto;
+  }
+
+  /* ── Event log ── */
+  .rec-events {
+    height: 100px;
+    overflow-y: auto;
+    border-top: 1px solid var(--color-border);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-primary);
+    flex-shrink: 0;
+  }
+
+  .event-line { padding: 1px 0; }
+  .event-line.keyboard { color: var(--color-primary); }
+  .event-line.mouse    { color: var(--color-text-tertiary); }
+
+  @media (max-width: 900px) {
+    .rec-layout { grid-template-columns: 1fr; height: auto; }
+    .rec-list-panel { height: 280px; }
+    .rec-player-panel { height: 500px; }
+  }
+
+  /* ── Tabs ── */
+  .rec-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--color-border);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .rec-tab-btn {
+    padding: var(--spacing-sm) var(--spacing-xl);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: color var(--transition-base), border-color var(--transition-base);
+  }
+
+  .rec-tab-btn.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+  }
+
+  .rec-tab-panel { display: none; }
+  .rec-tab-panel.active { display: block; }
+
+  /* ── Screenshots tab ── */
+  .ss-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .ss-count {
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
+  }
+
+  .ss-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--spacing-md);
+  }
+
+  .ss-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow var(--transition-base);
+  }
+
+  .ss-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+
+  .ss-thumb-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .ss-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity var(--transition-base);
+  }
+
+  .ss-thumb-wrap:hover .ss-thumb { opacity: 0.85; }
+
+  .ss-zoom-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity var(--transition-base);
+    color: white;
+    font-size: 1.5rem;
+  }
+
+  .ss-thumb-wrap:hover .ss-zoom-icon { opacity: 1; }
+
+  .ss-info {
+    padding: var(--spacing-sm) var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ss-name {
+    font-family: monospace;
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ss-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+  }
+
+  .ss-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
+  }
+
+  /* ── Lightbox ── */
+  .ss-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg);
+  }
+
+  .ss-lightbox.open { display: flex; }
+
+  .ss-lightbox img {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+    cursor: default;
+  }
+
+  .ss-lightbox-close {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tab bar -->
+<div class="rec-tabs">
+  <button class="rec-tab-btn active" id="tab-btn-recordings" onclick="showTab('recordings')">
+    Session Recordings
+  </button>
+  <button class="rec-tab-btn" id="tab-btn-screenshots" onclick="showTab('screenshots')">
+    Screenshots
+  </button>
+</div>
+
+<!-- ── Tab: Recordings ── -->
+<div class="rec-tab-panel active" id="tab-recordings">
+<div class="rec-layout">
+
+  <!-- Recording list -->
+  <div class="rec-list-panel">
+    <div class="rec-list-header">Recordings</div>
+    <div class="rec-list-body" id="recListBody">
+      <div class="rec-empty">Loading&hellip;</div>
+    </div>
+  </div>
+
+  <!-- Player -->
+  <div class="rec-player-panel">
+    <div class="rec-player-header">
+      <span class="rec-player-title" id="playerTitle">Select a recording</span>
+      <div class="rec-player-actions">
+        <button class="btn btn-secondary btn-sm" onclick="deleteCurrentRecording()" id="deleteBtn" disabled>Delete</button>
+      </div>
+    </div>
+
+    <div class="rec-player-body">
+      <div class="rec-video-area" id="videoArea">
+        <div class="rec-placeholder">
+          <p>No recording selected.</p>
+          <p style="margin-top:var(--spacing-sm);color:var(--color-text-tertiary);font-size:var(--text-xs)">Choose a recording from the list to replay it.</p>
+        </div>
+      </div>
+
+      <div class="rec-timeline" id="timelineArea" style="display:none">
+        <div class="timeline-row">
+          <input type="range" id="scrubber" min="0" value="0" step="1" oninput="scrubTo(parseInt(this.value))">
+          <span class="timeline-time" id="timeDisplay">0.0s / 0.0s</span>
+        </div>
+        <div class="playback-controls">
+          <button class="btn btn-secondary btn-sm" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+          <button class="btn btn-secondary btn-sm" onclick="stepFrame(-1)">&#8592; Prev</button>
+          <button class="btn btn-secondary btn-sm" onclick="stepFrame(1)">Next &#8594;</button>
+          <select class="speed-select" id="speedSelect" onchange="setSpeed(parseFloat(this.value))">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+          <span class="frame-counter" id="frameCounter">Frame 0 / 0</span>
+        </div>
+      </div>
+
+      <div class="rec-events" id="eventLog" style="display:none"></div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-recordings -->
+
+<!-- ── Tab: Screenshots ── -->
+<div class="rec-tab-panel" id="tab-screenshots">
+  <div class="ss-toolbar">
+    <span class="ss-count" id="ssCount"></span>
+    <button class="btn btn-primary btn-sm" onclick="captureScreenshot()">
+      <span class="icon icon-sm icon-monitor"></span> Capture Screenshot
+    </button>
+  </div>
+  <div class="ss-grid" id="ssGrid">
+    <div class="ss-empty">Loading&hellip;</div>
+  </div>
+</div><!-- /tab-screenshots -->
+
+<!-- Lightbox -->
+<div class="ss-lightbox" id="ssLightbox" onclick="closeLightbox()">
+  <button class="ss-lightbox-close" onclick="closeLightbox()">&times;</button>
+  <img id="ssLightboxImg" src="" alt="Screenshot" onclick="event.stopPropagation()">
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ═══════════════════════════════════════════════════════ Tabs ══ */
+function showTab(name) {
+  document.querySelectorAll('.rec-tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.rec-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('tab-btn-' + name).classList.add('active');
+  history.replaceState(null, '', '#' + name);
+  if (name === 'screenshots') loadScreenshots();
+}
+
+/* ═══════════════════════════════════════════════════════ State ══ */
+let csrfToken = '';
+let recordings = [];
+let currentId = null;
+let frames = [];       // array of frame indices 0..N-1
+let events = [];       // raw event objects from /events
+let currentFrame = 0;
+let playing = false;
+let playSpeed = 1.0;
+let playTimer = null;
+let frameInterval = 1.0; // seconds per frame from meta
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+}
+
+/* ═══════════════════════════════════════════════════════ List ══ */
+function loadRecordings() {
+  fetch('/api/recordings', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      recordings = data.recordings || [];
+      renderList();
+    })
+    .catch(err => {
+      document.getElementById('recListBody').innerHTML =
+        '<div class="rec-empty">Failed to load recordings</div>';
+    });
+}
+
+function renderList() {
+  const body = document.getElementById('recListBody');
+  if (recordings.length === 0) {
+    body.innerHTML = '<div class="rec-empty">No recordings found</div>';
+    return;
+  }
+  body.innerHTML = recordings.map(r => {
+    const id = r.id || r;
+    const meta = typeof r === 'object' ? r : {};
+    const name = meta.id || id;
+    const user = meta.username || '';
+    const start = meta.start_time ? new Date(meta.start_time).toLocaleString() : '';
+    const dur = meta.duration_seconds ? meta.duration_seconds.toFixed(1) + 's' : '';
+    const frames_n = meta.frame_count != null ? meta.frame_count + ' frames' : '';
+    return `<div class="rec-item ${currentId === id ? 'active' : ''}" onclick="selectRecording('${id}')">
+      <div class="rec-item-name">${name}</div>
+      <div class="rec-meta">
+        ${user ? '<span>' + user + '</span>' : ''}
+        ${start ? '<span>' + start + '</span>' : ''}
+        ${dur ? '<span>' + dur + '</span>' : ''}
+        ${frames_n ? '<span>' + frames_n + '</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════ Load recording ══ */
+async function selectRecording(id) {
+  stopPlay();
+  currentId = id;
+  renderList();
+
+  document.getElementById('playerTitle').textContent = id;
+  document.getElementById('deleteBtn').disabled = false;
+
+  // Load metadata
+  let meta = {};
+  try {
+    const r = await fetch(`/api/recordings/${id}`, { headers: apiHeaders() });
+    meta = await r.json();
+  } catch (e) {}
+
+  frameInterval = meta.frame_interval || 1.0;
+  const totalFrames = meta.frame_count || 0;
+  const duration = meta.duration_seconds || (totalFrames * frameInterval);
+
+  frames = Array.from({ length: totalFrames }, (_, i) => i);
+
+  // Load events
+  try {
+    const evResp = await fetch(`/api/recordings/${id}/events`, { headers: apiHeaders() });
+    const evData = await evResp.json();
+    events = evData.events || [];
+  } catch (e) {
+    events = [];
+  }
+
+  // Show timeline + event log
+  document.getElementById('timelineArea').style.display = '';
+  document.getElementById('eventLog').style.display = '';
+
+  const scrubber = document.getElementById('scrubber');
+  scrubber.max = Math.max(0, totalFrames - 1);
+  scrubber.value = 0;
+
+  currentFrame = 0;
+  updateTimeDisplay(duration);
+  updateFrameCounter(totalFrames);
+  renderFrame(0, id);
+  renderEvents(-1);
+}
+
+/* ═══════════════════════════════════════════════════════ Render frame ══ */
+function renderFrame(frameNum, id) {
+  if (frames.length === 0) return;
+  const area = document.getElementById('videoArea');
+  let img = area.querySelector('img');
+  if (!img) {
+    area.innerHTML = '';
+    img = document.createElement('img');
+    img.alt = 'Recording frame';
+    area.appendChild(img);
+  }
+  img.src = `/api/recordings/${id}/frame/${frameNum}?_t=${Date.now()}`;
+  img.onerror = () => { img.src = ''; };
+  document.getElementById('scrubber').value = frameNum;
+  updateTimeDisplay(frames.length * frameInterval);
+  updateFrameCounter(frames.length);
+  renderEvents(frameNum * frameInterval);
+}
+
+function updateTimeDisplay(totalDuration) {
+  const current = (currentFrame * frameInterval).toFixed(1);
+  document.getElementById('timeDisplay').textContent =
+    current + 's / ' + totalDuration.toFixed(1) + 's';
+}
+
+function updateFrameCounter(total) {
+  document.getElementById('frameCounter').textContent =
+    'Frame ' + (currentFrame + 1) + ' / ' + total;
+}
+
+function renderEvents(upToTime) {
+  const log = document.getElementById('eventLog');
+  if (events.length === 0) { log.innerHTML = '<span style="color:var(--color-text-tertiary)">No events recorded</span>'; return; }
+  const visible = upToTime < 0 ? events : events.filter(e => e.t <= upToTime);
+  log.innerHTML = visible.slice(-50).map(e => {
+    const t = e.t != null ? e.t.toFixed(2) : '?';
+    let desc = e.type || '?';
+    if (e.type === 'key' || e.type === 'key_mod') desc = `key ${e.keycode || ''}`;
+    else if (e.type === 'text') desc = `text: ${(e.text || '').substring(0, 30)}`;
+    else if (e.type === 'mouse_click') desc = `click ${e.button || ''}`;
+    else if (e.type === 'mouse_move' || e.type === 'mouse_move_abs') desc = `mouse`;
+    const cls = (desc.startsWith('key') || desc.startsWith('text')) ? 'keyboard' : 'mouse';
+    return `<div class="event-line ${cls}">[${t}s] ${desc}</div>`;
+  }).join('');
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ═══════════════════════════════════════════════════════ Playback ══ */
+function togglePlay() {
+  if (playing) stopPlay(); else startPlay();
+}
+
+function startPlay() {
+  if (frames.length === 0 || !currentId) return;
+  if (currentFrame >= frames.length - 1) currentFrame = 0;
+  playing = true;
+  document.getElementById('playBtn').textContent = '⏸ Pause';
+  scheduleNextFrame();
+}
+
+function stopPlay() {
+  playing = false;
+  document.getElementById('playBtn').textContent = '▶ Play';
+  if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+}
+
+function scheduleNextFrame() {
+  if (!playing) return;
+  const delay = (frameInterval * 1000) / playSpeed;
+  playTimer = setTimeout(() => {
+    currentFrame++;
+    if (currentFrame >= frames.length) {
+      currentFrame = frames.length - 1;
+      stopPlay();
+    } else {
+      renderFrame(currentFrame, currentId);
+      scheduleNextFrame();
+    }
+  }, delay);
+}
+
+function stepFrame(delta) {
+  stopPlay();
+  currentFrame = Math.max(0, Math.min(frames.length - 1, currentFrame + delta));
+  renderFrame(currentFrame, currentId);
+}
+
+function scrubTo(frameNum) {
+  stopPlay();
+  currentFrame = Math.max(0, Math.min(frames.length - 1, frameNum));
+  renderFrame(currentFrame, currentId);
+}
+
+function setSpeed(s) {
+  playSpeed = s;
+}
+
+/* ═══════════════════════════════════════════════════════ Delete ══ */
+function deleteCurrentRecording() {
+  if (!currentId) return;
+  if (!confirm(`Delete recording "${currentId}"?`)) return;
+  fetch(`/api/recordings/${currentId}`, { method: 'DELETE', headers: apiHeaders() })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'ok') {
+        currentId = null;
+        document.getElementById('playerTitle').textContent = 'Select a recording';
+        document.getElementById('deleteBtn').disabled = true;
+        document.getElementById('videoArea').innerHTML =
+          '<div class="rec-placeholder"><p>Recording deleted.</p></div>';
+        document.getElementById('timelineArea').style.display = 'none';
+        document.getElementById('eventLog').style.display = 'none';
+        loadRecordings();
+      }
+    });
+}
+
+/* ═══════════════════════════════════════════════════════ Init ══ */
+fetch('/api/status', { headers: apiHeaders() })
+  .then(r => r.json())
+  .then(d => { csrfToken = d.csrf_token || ''; loadRecordings(); })
+  .catch(() => loadRecordings());
+
+// Restore tab from hash
+(function() {
+  const hash = location.hash.replace('#', '');
+  if (hash === 'screenshots') showTab('screenshots');
+})();
+
+/* ═══════════════════════════════════════════════════════ Screenshots ══ */
+function loadScreenshots() {
+  fetch('/api/screenshots', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => renderScreenshots(data.screenshots || []))
+    .catch(() => renderScreenshots([]));
+}
+
+function renderScreenshots(shots) {
+  const grid = document.getElementById('ssGrid');
+  const count = document.getElementById('ssCount');
+  count.textContent = shots.length + ' screenshot' + (shots.length !== 1 ? 's' : '');
+
+  if (!shots.length) {
+    grid.innerHTML = '<div class="ss-empty">No screenshots yet. Click <strong>Capture Screenshot</strong> to save one from the live stream.</div>';
+    return;
+  }
+
+  grid.innerHTML = shots.map(s => {
+    const dt = s.taken_at ? new Date(s.taken_at + 'Z').toLocaleString() : s.filename;
+    const kb = s.size ? (s.size / 1024).toFixed(1) + ' KB' : '';
+    return `
+      <div class="ss-card">
+        <div class="ss-thumb-wrap" onclick="openLightbox('/api/screenshots/${encodeURIComponent(s.filename)}')">
+          <img class="ss-thumb" src="/api/screenshots/${encodeURIComponent(s.filename)}" alt="${s.filename}" loading="lazy">
+          <div class="ss-zoom-icon">&#128269;</div>
+        </div>
+        <div class="ss-info">
+          <div class="ss-name" title="${s.filename}">${dt}</div>
+          ${kb ? `<div class="ss-name" style="color:var(--color-text-tertiary)">${kb}</div>` : ''}
+          <div class="ss-actions">
+            <a class="btn btn-secondary btn-sm" href="/api/screenshots/${encodeURIComponent(s.filename)}" download="${s.filename}">Download</a>
+            <button class="btn btn-danger btn-sm" onclick="deleteScreenshot('${s.filename}')">Delete</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function captureScreenshot() {
+  try {
+    const r = await fetch('/api/screenshots', { method: 'POST', headers: apiHeaders() });
+    const d = await r.json();
+    if (r.ok) {
+      loadScreenshots();
+    } else {
+      alert(d.error || 'Failed to capture screenshot');
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function deleteScreenshot(filename) {
+  if (!confirm('Delete this screenshot?')) return;
+  try {
+    const r = await fetch('/api/screenshots/' + encodeURIComponent(filename), {
+      method: 'DELETE', headers: apiHeaders()
+    });
+    if (r.ok) loadScreenshots();
+    else { const d = await r.json(); alert(d.error || 'Delete failed'); }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function openLightbox(url) {
+  document.getElementById('ssLightboxImg').src = url;
+  document.getElementById('ssLightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('ssLightbox').classList.remove('open');
+  document.getElementById('ssLightboxImg').src = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox();
+});
+</script>
+{% endblock %}

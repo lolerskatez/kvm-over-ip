@@ -1,0 +1,12 @@
+{
+  "admin": {
+    "password": "$2b$12$R9h7cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jKMm6",
+    "is_admin": true,
+    "requires_password_change": true
+  },
+  "operator": {
+    "password": "$2b$12$R9h7cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jKMm6",
+    "is_admin": false,
+    "requires_password_change": true
+  }
+}

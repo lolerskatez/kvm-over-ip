@@ -1,0 +1,55 @@
+[Unit]
+Description=KVM over IP - Remote Console Server
+Documentation=https://github.com/your-repo/kvm-over-ip
+After=network.target
+
+[Service]
+Type=notify
+User=kvm
+Group=kvm
+WorkingDirectory=/opt/kvm-over-ip
+Environment="PATH=/opt/kvm-over-ip/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+
+# Main process
+ExecStart=/opt/kvm-over-ip/.venv/bin/gunicorn -c /opt/kvm-over-ip/gunicorn_config.py app:app
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=600
+StartLimitBurst=3
+
+# Process isolation
+PrivateTmp=yes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/etc/kvm /var/log/kvm-over-ip /dev/video0 /dev/ttyUSB0
+
+# Device access (needed for USB devices)
+PrivateDevices=no
+DevicePolicy=closed
+DeviceAllow=/dev/video0 rw
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/tty1a86:7523 rw
+
+# Capabilities (drop most, keep what's needed)
+AmbientCapabilities=CAP_SYS_ADMIN  # Might be needed for sysfs EDID access
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SYS_ADMIN
+SecureBits=keep-caps
+
+# System resource limits
+LimitNOFILE=65535
+LimitNPROC=512
+
+# Standard output
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kvm-over-ip
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
