@@ -5,11 +5,13 @@ RUN apk update && apk add --no-cache \
     python3 \
     py3-pip \
     ffmpeg \
+    ffmpeg-dev \
     udev \
     openrc \
     linux-headers \
     build-base \
-    curl
+    curl \
+    pkg-config
 
 # Create app directory
 WORKDIR /app
