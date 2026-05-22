@@ -23,6 +23,7 @@ COPY . .
 # Create virtual environment and install Python dependencies
 RUN python3 -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
+RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create kvm user and group
