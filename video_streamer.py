@@ -106,6 +106,16 @@ class VideoStreamer:
                     bufsize=10*1024*1024
                 )
                 
+                # Start thread to log FFmpeg stderr output
+                def log_ffmpeg_stderr():
+                    for line in self.process.stderr:
+                        line_str = line.decode('utf-8', errors='replace').strip()
+                        if line_str:
+                            logger.debug(f"FFmpeg: {line_str}")
+                
+                stderr_thread = threading.Thread(target=log_ffmpeg_stderr, daemon=True)
+                stderr_thread.start()
+                
                 self.running = True
                 logger.info(f"Video streamer started: {self.video_device} @ {self.resolution} {self.framerate}fps ({self.codec.upper()})")
                 return True

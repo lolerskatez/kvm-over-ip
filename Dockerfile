@@ -33,6 +33,10 @@ RUN mkdir -p /var/log/kvm-over-ip \
     && mkdir -p /var/lib/kvm \
     && mkdir -p /app/data
 
+# Add root user to video group for V4L2 device access
+# (video group already exists in Alpine base image)
+RUN adduser root video 2>/dev/null || true
+
 # Expose port
 EXPOSE 8000
 
