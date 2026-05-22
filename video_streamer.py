@@ -55,6 +55,7 @@ class VideoStreamer:
         self._stats_frames = 0
         self._stats_bytes = 0
         self._record_callback = None
+        self._consumer_thread = None  # Background thread to consume FFmpeg output
     
     def start(self):
         """Start video streaming process."""
@@ -130,6 +131,10 @@ class VideoStreamer:
                 stderr_thread = threading.Thread(target=log_ffmpeg_stderr, daemon=True)
                 stderr_thread.start()
                 
+                # Start background consumer thread to prevent pipe from filling up
+                self._consumer_thread = threading.Thread(target=self._consume_frames, daemon=True)
+                self._consumer_thread.start()
+                
                 self.running = True
                 logger.info(f"Video streamer started: {self.video_device} @ {self.resolution} {self.framerate}fps ({self.codec.upper()})")
                 return True
@@ -142,6 +147,7 @@ class VideoStreamer:
     def stop(self):
         """Stop video streaming process."""
         with self.lock:
+            self.running = False  # Signal threads to stop
             if self.process:
                 try:
                     self.process.terminate()
@@ -152,8 +158,11 @@ class VideoStreamer:
                     logger.error(f"Error stopping streamer: {e}")
                 finally:
                     self.process = None
-                    self.running = False
                     logger.info("Video streamer stopped")
+            
+            # Wait for consumer thread to finish
+            if self._consumer_thread and self._consumer_thread.is_alive():
+                self._consumer_thread.join(timeout=2)
     
     def is_running(self):
         """Check if streamer is running."""
@@ -162,70 +171,109 @@ class VideoStreamer:
                 return self.process.poll() is None
             return False
     
+    def _consume_frames(self):
+        """
+        Background thread that continuously reads frames from FFmpeg.
+        This prevents the stdout pipe from filling up and blocking FFmpeg.
+        """
+        logger.debug("Frame consumer thread started")
+        buffer = b''
+        try:
+            while self.running and self.process:
+                # Read from FFmpeg stdout
+                chunk = self.process.stdout.read(4096)
+                if not chunk:
+                    logger.debug("FFmpeg stdout closed")
+                    break
+                    
+                buffer += chunk
+                
+                # Extract JPEG frames (MJPEG format)
+                while True:
+                    # Find start of image marker (SOI)
+                    soi = buffer.find(b'\xff\xd8')
+                    if soi == -1:
+                        buffer = b''
+                        break
+                    
+                    # Find end of image marker (EOI)
+                    eoi = buffer.find(b'\xff\xd9', soi + 2)
+                    if eoi == -1:
+                        # Incomplete frame, keep buffer starting from SOI
+                        buffer = buffer[soi:]
+                        break
+                    
+                    # Extract complete frame
+                    frame = buffer[soi:eoi + 2]
+                    buffer = buffer[eoi + 2:]
+                    
+                    # Store latest frame
+                    with self._frame_lock:
+                        self._latest_frame = frame
+                    
+                    frame_len = len(frame)
+                    
+                    # Update statistics
+                    with self._stats_lock:
+                        self._frame_count += 1
+                        self._byte_count += frame_len
+                        self._stats_frames += 1
+                        self._stats_bytes += frame_len
+                        now = time.monotonic()
+                        elapsed = now - self._stats_time
+                        if elapsed >= 1.0:
+                            self._fps = round(self._stats_frames / elapsed, 1)
+                            self._bandwidth = round(self._stats_bytes / elapsed)
+                            self._stats_frames = 0
+                            self._stats_bytes = 0
+                            self._stats_time = now
+                    
+                    # Call recording callback if set
+                    cb = self._record_callback
+                    if cb:
+                        try:
+                            cb(frame)
+                        except Exception as e:
+                            logger.error(f"Recording callback error: {e}")
+                            
+        except Exception as e:
+            logger.error(f"Frame consumer thread error: {e}")
+        finally:
+            logger.debug("Frame consumer thread stopped")
+    
+    
     def get_stream_response(self):
         """
         Get MJPEG stream response for Flask.
         Returns a generator that yields properly framed MJPEG multipart responses.
+        Reads from the latest frame captured by the background consumer thread.
         """
         if not self.is_running():
             return None
         
         def generate():
             """Generator for MJPEG stream with proper boundary framing."""
-            BOUNDARY = b'--jpegboundary'
-            buffer = b''
+            last_frame_id = 0
             try:
                 while self.is_running():
-                    chunk = self.process.stdout.read(4096)
-                    if not chunk:
-                        break
-                    buffer += chunk
+                    # Get latest frame
+                    with self._frame_lock:
+                        frame = self._latest_frame
+                        current_frame_id = self._frame_count
                     
-                    while True:
-                        soi = buffer.find(b'\xff\xd8')
-                        if soi == -1:
-                            buffer = b''
-                            break
+                    # Wait for new frame if we haven't seen this one yet
+                    if frame and current_frame_id != last_frame_id:
+                        last_frame_id = current_frame_id
                         
-                        eoi = buffer.find(b'\xff\xd9', soi + 2)
-                        if eoi == -1:
-                            buffer = buffer[soi:]
-                            break
+                        # Yield frame in multipart/x-mixed-replace format
+                        yield (b'--jpegboundary\r\n'
+                               b'Content-Type: image/jpeg\r\n'
+                               b'Content-Length: ' + str(len(frame)).encode() + b'\r\n\r\n' +
+                               frame + b'\r\n')
+                    else:
+                        # No new frame yet, wait a bit
+                        time.sleep(0.033)  # ~30 FPS max
                         
-                        frame = buffer[soi:eoi + 2]
-                        buffer = buffer[eoi + 2:]
-                        
-                        with self._frame_lock:
-                            self._latest_frame = frame
-
-                        frame_len = len(frame)
-                        with self._stats_lock:
-                            self._frame_count += 1
-                            self._byte_count += frame_len
-                            self._stats_frames += 1
-                            self._stats_bytes += frame_len
-                            now = time.monotonic()
-                            elapsed = now - self._stats_time
-                            if elapsed >= 1.0:
-                                self._fps = round(self._stats_frames / elapsed, 1)
-                                self._bandwidth = round(self._stats_bytes / elapsed)
-                                self._stats_frames = 0
-                                self._stats_bytes = 0
-                                self._stats_time = now
-
-                        cb = self._record_callback
-                        if cb:
-                            try:
-                                cb(frame)
-                            except Exception:
-                                pass
-
-                        yield (
-                            BOUNDARY + b'\r\n'
-                            b'Content-Type: image/jpeg\r\n'
-                            b'Content-Length: ' + str(len(frame)).encode() + b'\r\n'
-                            b'\r\n' + frame + b'\r\n'
-                        )
             except Exception as e:
                 logger.error(f"Stream generation error: {e}")
         
