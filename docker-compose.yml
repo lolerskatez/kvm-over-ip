@@ -23,8 +23,8 @@ services:
     # USB and video device access (uncomment for hardware deployment)
     devices:
       - /dev/bus/usb:/dev/bus/usb
-      # - /dev/video0:/dev/video0     # Video capture device
-      # - /dev/video1:/dev/video1     # Additional video device
+      - /dev/video0:/dev/video0     # Video capture device
+      - /dev/video1:/dev/video1     # Additional video device
     
     # Required for USB device access
     privileged: true
