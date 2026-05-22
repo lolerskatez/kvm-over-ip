@@ -1343,7 +1343,7 @@ def api_ping():
 @login_required
 def api_video_stats():
     """Get current video stream statistics (FPS, bandwidth, resolution)."""
-    if not video_streamer:
+    if not video_streamer or not video_streamer.running:
         return jsonify({'error': 'Video not available'}), 503
     return jsonify(video_streamer.get_stream_stats())
 
