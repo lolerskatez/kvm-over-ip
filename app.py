@@ -2706,38 +2706,41 @@ def _le_renewal_loop():
         _time.sleep(86400)  # Check once per day
 
 
+# Initialize subsystems (runs when module is loaded, works with both direct execution and gunicorn)
+signal.signal(signal.SIGTERM, graceful_shutdown)
+signal.signal(signal.SIGINT, graceful_shutdown)
+
+init_hid()
+init_video()
+init_pxe()
+init_recorder()
+init_cert_manager()
+init_edid()
+init_macros()
+init_notifications()
+init_oidc()
+init_backup()
+setup_remote_syslog()
+
+# Migrate plaintext config files to encrypted storage (if config.key exists)
+if config_crypto.enabled:
+    for _path in (USERS_PATH, Path(TOTP_PATH)):
+        if config_crypto.migrate_plaintext(_path):
+            logger.info(f"Migrated {_path} to encrypted storage")
+
+# Ensure all users have password change flag set (migration for existing users)
+ensure_password_change_flag()
+
+# Start WoL scheduler background thread
+threading.Thread(target=_wol_scheduler_loop, daemon=True, name='wol-scheduler').start()
+logger.info("WoL scheduler started")
+
+# Start Let's Encrypt auto-renewal background thread
+threading.Thread(target=_le_renewal_loop, daemon=True, name='le-renewal').start()
+logger.info("LE auto-renewal thread started")
+
+
 if __name__ == '__main__':
-    signal.signal(signal.SIGTERM, graceful_shutdown)
-    signal.signal(signal.SIGINT, graceful_shutdown)
-    
-    init_hid()
-    init_video()
-    init_pxe()
-    init_recorder()
-    init_cert_manager()
-    init_edid()
-    init_macros()
-    init_notifications()
-    init_oidc()
-    init_backup()
-    setup_remote_syslog()
-
-    # Migrate plaintext config files to encrypted storage (if config.key exists)
-    if config_crypto.enabled:
-        for _path in (USERS_PATH, Path(TOTP_PATH)):
-            if config_crypto.migrate_plaintext(_path):
-                logger.info(f"Migrated {_path} to encrypted storage")
-
-    # Ensure all users have password change flag set (migration for existing users)
-    ensure_password_change_flag()
-
-    # Start WoL scheduler background thread
-    threading.Thread(target=_wol_scheduler_loop, daemon=True, name='wol-scheduler').start()
-    logger.info("WoL scheduler started")
-
-    # Start Let's Encrypt auto-renewal background thread
-    threading.Thread(target=_le_renewal_loop, daemon=True, name='le-renewal').start()
-    logger.info("LE auto-renewal thread started")
     
     use_https = os.path.exists('cert.pem') and os.path.exists('key.pem')
     ssl_ctx = ('cert.pem', 'key.pem') if use_https else None
