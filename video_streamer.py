@@ -106,7 +106,21 @@ class VideoStreamer:
                     bufsize=10*1024*1024
                 )
                 
-                # Start thread to log FFmpeg stderr output
+                # Give FFmpeg a moment to initialize and check if it crashed immediately
+                import time
+                time.sleep(0.5)
+                
+                if self.process.poll() is not None:
+                    # Process exited immediately - capture stderr output
+                    stderr_output = self.process.stderr.read().decode('utf-8', errors='replace')
+                    logger.error(f"FFmpeg exited immediately with code {self.process.returncode}")
+                    if stderr_output:
+                        logger.error(f"FFmpeg stderr: {stderr_output}")
+                    self.process = None
+                    self.running = False
+                    return False
+                
+                # Start thread to log FFmpeg stderr output (only if process is still running)
                 def log_ffmpeg_stderr():
                     for line in self.process.stderr:
                         line_str = line.decode('utf-8', errors='replace').strip()
