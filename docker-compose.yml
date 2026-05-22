@@ -10,14 +10,10 @@ services:
       - "80:8000"
     
     volumes:
-      # Configuration files
-      - ./config.json:/app/config.json
-      - ./users.json:/app/users.json
-      
       # Application logs
       - kvm-logs:/var/log/kvm-over-ip
       
-      # Session data (persistent)
+      # Session and config data (persistent)
       - kvm-data:/var/lib/kvm
     
     # USB and video device access (uncomment for hardware deployment)
