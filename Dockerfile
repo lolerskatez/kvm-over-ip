@@ -11,7 +11,7 @@ RUN apk update && apk add --no-cache \
     linux-headers \
     build-base \
     curl \
-    pkg-config
+    pkgconf
 
 # Create app directory
 WORKDIR /app
