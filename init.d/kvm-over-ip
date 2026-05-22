@@ -27,7 +27,7 @@ if [ "$PRODUCTION" = "1" ]; then
     command_args="-c ${APP_PATH}/gunicorn_config.py app:app"
 else
     # Flask development mode
-    command="/usr/bin/python3"
+    command="${VENV_PATH}/bin/python"
     command_args="${APP_PATH}/app.py"
 fi
 

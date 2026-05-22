@@ -30,7 +30,11 @@ if ! getent passwd kvm > /dev/null; then
 fi
 
 echo "[3/7] Installing Python dependencies..."
-pip3 install --no-cache-dir -r /opt/kvm-over-ip/requirements.txt
+cd /opt/kvm-over-ip
+python3 -m venv .venv
+. /opt/kvm-over-ip/.venv/bin/activate
+pip install --no-cache-dir -r /opt/kvm-over-ip/requirements.txt
+deactivate
 
 echo "[4/7] Setting up directories and permissions..."
 mkdir -p /etc/kvm
