@@ -1,0 +1,1508 @@
+{% extends "base.html" %}
+{% block title %}Console — KVM-over-IP{% endblock %}
+
+{% block extra_css %}<style>
+  /* ── Viewport fill ─────────────────────────────────── */
+  .main    { overflow: hidden !important; }
+  .content { overflow: hidden !important; flex: 1; }
+  .page-body {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Console layout ─────────────────────────────────── */
+  .console-wrap {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .console-video {
+    flex: 3;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .console-video img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .console-video.fullscreen {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .console-video.pointer-locked { cursor: none; }
+
+  /* ── Controls panel ─────────────────────────────────── */
+  .console-controls {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--color-bg-secondary);
+    border-left: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .ctrl-section {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .ctrl-section:last-child { border-bottom: none; }
+
+  .ctrl-title {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  /* ── Key grids ──────────────────────────────────────── */
+  .key-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xs);
+  }
+
+  .fkey-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  /* ── Connection status ──────────────────────────────── */
+  .quality-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--spacing-md);
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .qi-val  { font-weight: 700; color: var(--color-text-secondary); }
+  .qi-good { color: var(--color-success); }
+  .qi-warn { color: var(--color-warning); }
+  .qi-bad  { color: var(--color-danger); }
+
+  .conn-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs) var(--spacing-sm);
+    align-items: center;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 2px;
+    vertical-align: middle;
+  }
+
+  .status-dot.online  { background: var(--color-success); }
+  .status-dot.offline { background: var(--color-danger); }
+
+  .conn-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    gap: 3px;
+  }
+
+  .lock-key {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-text-tertiary);
+    letter-spacing: 0.04em;
+  }
+
+  .lock-key.active {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: white;
+  }
+
+  .ws-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-tertiary);
+  }
+
+  .ws-badge.connected    { color: var(--color-success); border-color: var(--color-success); }
+  .ws-badge.disconnected { color: var(--color-danger);  border-color: var(--color-danger); }
+
+  /* ── Mouse mode toggle ──────────────────────────────── */
+  .mode-toggle {
+    display: flex;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .mode-toggle .btn {
+    flex: 1;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    min-height: 30px;
+  }
+
+  .mode-toggle .btn.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  /* ── Video quality rows ─────────────────────────────── */
+  .vq-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .vq-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    width: 32px;
+    flex-shrink: 0;
+  }
+
+  .vq-row select { flex: 1; padding: 4px 6px; font-size: var(--text-xs); }
+
+  /* ── Text send ──────────────────────────────────────── */
+  .send-row { display: flex; gap: var(--spacing-xs); }
+  .send-row input { flex: 1; padding: 5px var(--spacing-sm); font-size: var(--text-sm); }
+
+  /* ── Status log ─────────────────────────────────────── */
+  .status-log {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    height: 90px;
+    overflow-y: auto;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  /* ── Rec dot ────────────────────────────────────────── */
+  .rec-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--color-danger);
+    display: inline-block;
+    animation: recBlink 1s infinite;
+  }
+
+  @keyframes recBlink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+
+  /* ── Idle warning ───────────────────────────────────── */
+  .idle-warning {
+    position: fixed;
+    inset: 0 0 auto;
+    background: var(--color-warning);
+    color: white;
+    text-align: center;
+    padding: var(--spacing-sm);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    z-index: 2000;
+    display: none;
+  }
+
+  /* ── Fullscreen exit overlay ────────────────────────── */
+  .fullscreen-exit {
+    position: fixed;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    display: none;
+    backdrop-filter: blur(4px);
+  }
+
+  /* ── Mobile ─────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .console-wrap { flex-direction: column; }
+    .console-video { min-height: 40%; flex: none; }
+    .console-controls {
+      width: 100%;
+      height: auto;
+      border-left: none;
+      border-top: 1px solid var(--color-border);
+    }
+  }
+
+  /* ── Virtual keyboard overlay ───────────────────────── */
+  .vkb-overlay {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-bg-secondary);
+    border-top: 2px solid var(--color-border);
+    padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+    z-index: 900;
+    display: none;
+    -webkit-user-select: none;
+    user-select: none;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.18);
+  }
+
+  .vkb-overlay.visible { display: block; }
+
+  .vkb-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-xs);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .vkb-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .vkb-row { display: flex; gap: 3px; }
+
+  .vkb-key {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 5px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+  }
+
+  .vkb-key:hover    { background: var(--color-bg-tertiary); }
+  .vkb-key:active   { background: var(--color-primary); color: white; }
+  .vkb-key.w14      { min-width: 44px; }
+  .vkb-key.w16      { min-width: 52px; }
+  .vkb-key.w20      { min-width: 64px; }
+  .vkb-key.w28      { min-width: 90px; }
+  .vkb-key.w60      { min-width: 192px; }
+  .vkb-key.modifier { background: var(--color-bg-tertiary); font-weight: 700; }
+  .vkb-key.modifier.active { background: var(--color-primary); color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="idle-warning" id="idleWarning">Session will expire due to inactivity. Move mouse or press a key to stay connected.</div>
+
+<div class="console-wrap">
+
+  <!-- ── Video stream ────────────────────────────────── -->
+  <div class="console-video" id="videoPanel">
+    <img src="/stream" id="videoStream" alt="KVM Video Stream">
+  </div>
+
+  <!-- ── Controls ────────────────────────────────────── -->
+  <div class="console-controls">
+
+    <!-- Connection -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Connection</div>
+      <div class="quality-bar" id="qualityBar">
+        <span>Latency: <span class="qi-val" id="qiLatency">—</span></span>
+        <span>FPS: <span class="qi-val" id="qiFps">—</span></span>
+        <span>BW: <span class="qi-val" id="qiBw">—</span></span>
+        <span id="recIndicator"></span>
+      </div>
+      <div class="conn-bar">
+        <span class="lock-key" id="capsLockIndicator"  title="Caps Lock">CAP</span>
+        <span class="lock-key" id="numLockIndicator"   title="Num Lock">NUM</span>
+        <span class="lock-key" id="scrollLockIndicator" title="Scroll Lock">SCR</span>
+        <span class="conn-chip" id="statusIndicator">
+          <span class="status-dot offline"></span>HID
+          <span class="status-dot offline" style="margin-left:3px;"></span>Video
+        </span>
+        <span class="ws-badge disconnected" id="wsStatus">WS: ---</span>
+      </div>
+    </div>
+
+    <!-- Quick Keys -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Quick Keys</div>
+      <div class="key-grid">
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('ctrl_alt_del')">Ctrl+Alt+Del</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('enter')">Enter</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('esc')">Esc</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('backspace')">Backspace</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('tab')">Tab</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('capslock')">Caps Lock</button>
+      </div>
+      <button class="btn btn-danger btn-block" style="margin-top:var(--spacing-xs);" onclick="sendKey('power')">
+        <span class="icon icon-sm icon-power"></span> Power
+      </button>
+    </div>
+
+    <!-- Mouse -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Mouse</div>
+      <div class="key-grid" style="margin-bottom:var(--spacing-sm);">
+        <button class="btn btn-secondary btn-sm" onclick="clickMouse('left')">Left Click</button>
+        <button class="btn btn-secondary btn-sm" onclick="clickMouse('right')">Right Click</button>
+      </div>
+      <div class="ctrl-title" style="margin-bottom:4px;">Mode</div>
+      <div class="mode-toggle" id="mouseModeToggle">
+        <button class="btn active" id="modeAbsolute" onclick="setMouseMode('absolute')">Absolute</button>
+        <button class="btn"        id="modeRelative" onclick="setMouseMode('relative')">Relative</button>
+      </div>
+      <button class="btn btn-secondary btn-block btn-sm"
+              style="margin-top:var(--spacing-xs);"
+              onclick="togglePointerLock()" id="pointerLockBtn">Enable Pointer Lock</button>
+      <p id="pointerLockHint" style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px;">
+        Click video to capture mouse &mdash; Esc to release.
+      </p>
+    </div>
+
+    <!-- Function Keys -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Function Keys</div>
+      <div class="fkey-grid">
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f1')">F1</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f2')">F2</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f3')">F3</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f4')">F4</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f5')">F5</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f6')">F6</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f7')">F7</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f8')">F8</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f9')">F9</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f10')">F10</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f11')">F11</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendKey('f12')">F12</button>
+      </div>
+    </div>
+
+    <!-- Scroll -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Scroll</div>
+      <div class="key-grid">
+        <button class="btn btn-secondary btn-sm" onclick="sendScroll(-3)">Scroll Up</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendScroll(3)">Scroll Down</button>
+      </div>
+    </div>
+
+    <!-- Type Text -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Type Text</div>
+      <div class="send-row">
+        <input type="text" id="textInput" placeholder="Text to send&hellip;">
+        <button class="btn btn-primary btn-sm" onclick="sendText()">Send</button>
+      </div>
+      <button class="btn btn-secondary btn-block btn-sm"
+              style="margin-top:var(--spacing-xs);"
+              onclick="pasteFromClipboard()">Paste Clipboard</button>
+    </div>
+
+    <!-- Video Quality -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Video Quality</div>
+      <div class="vq-row">
+        <span class="vq-label">Res</span>
+        <select id="vqRes" title="Resolution">
+          <option value="640x480">640&times;480</option>
+          <option value="800x600">800&times;600</option>
+          <option value="1024x768">1024&times;768</option>
+          <option value="1280x720" selected>1280&times;720</option>
+          <option value="1920x1080">1920&times;1080</option>
+        </select>
+      </div>
+      <div class="vq-row">
+        <span class="vq-label">FPS</span>
+        <select id="vqFps" title="Framerate">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15" selected>15</option>
+          <option value="24">24</option>
+          <option value="30">30</option>
+        </select>
+      </div>
+      <div class="vq-row">
+        <span class="vq-label">BR</span>
+        <select id="vqBitrate" title="Bitrate">
+          <option value="500k">500k</option>
+          <option value="1000k">1M</option>
+          <option value="2000k" selected>2M</option>
+          <option value="4000k">4M</option>
+          <option value="8000k">8M</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block btn-sm"
+              style="margin-top:var(--spacing-xs);"
+              onclick="applyVideoQuality()">Apply</button>
+    </div>
+
+    <!-- Keyboard Layout -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Keyboard Layout</div>
+      <select id="kbLayout" title="Keyboard layout" onchange="setKeyboardLayout(this.value)">
+        <option value="qwerty_us">US QWERTY</option>
+        <option value="qwerty_uk">UK QWERTY</option>
+        <option value="azerty_fr">French AZERTY</option>
+        <option value="qwertz_de">German QWERTZ</option>
+      </select>
+    </div>
+
+    <!-- Capture & Recording -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Capture</div>
+      <button class="btn btn-secondary btn-block btn-sm" onclick="takeScreenshot()">
+        <span class="icon icon-sm icon-monitor"></span> Screenshot
+      </button>
+      <button class="btn btn-secondary btn-block btn-sm"
+              style="margin-top:var(--spacing-xs);"
+              onclick="toggleRecording()" id="recordBtn" hidden>Start Recording</button>
+      <button class="btn btn-secondary btn-block btn-sm"
+              style="margin-top:var(--spacing-xs);"
+              onclick="toggleVkb()" id="vkbToggleBtn">Virtual Keyboard</button>
+    </div>
+
+    <!-- Display -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Display</div>
+      <button class="btn btn-secondary btn-block btn-sm" onclick="toggleFullscreen()">
+        Fullscreen
+      </button>
+    </div>
+
+    <!-- Status Log -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Status Log</div>
+      <div class="status-log" id="log"></div>
+    </div>
+
+  </div><!-- /.console-controls -->
+
+</div><!-- /.console-wrap -->
+
+<button id="fullscreenExit" class="fullscreen-exit" onclick="toggleFullscreen()">&times; Exit Fullscreen</button>
+
+<!-- Virtual Keyboard Overlay -->
+<div id="vkbOverlay" class="vkb-overlay">
+  <div class="vkb-title">
+    <span>Virtual Keyboard</span>
+    <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="toggleVkb()">✕ Hide</button>
+  </div>
+  <div class="vkb-rows">
+    <!-- F-key row -->
+    <div class="vkb-row">
+      <button class="vkb-key w14" onclick="vkbTap(0x29)">Esc</button>
+      <button class="vkb-key" onclick="vkbTap(0x3A)">F1</button>
+      <button class="vkb-key" onclick="vkbTap(0x3B)">F2</button>
+      <button class="vkb-key" onclick="vkbTap(0x3C)">F3</button>
+      <button class="vkb-key" onclick="vkbTap(0x3D)">F4</button>
+      <button class="vkb-key" onclick="vkbTap(0x3E)">F5</button>
+      <button class="vkb-key" onclick="vkbTap(0x3F)">F6</button>
+      <button class="vkb-key" onclick="vkbTap(0x40)">F7</button>
+      <button class="vkb-key" onclick="vkbTap(0x41)">F8</button>
+      <button class="vkb-key" onclick="vkbTap(0x42)">F9</button>
+      <button class="vkb-key" onclick="vkbTap(0x43)">F10</button>
+      <button class="vkb-key" onclick="vkbTap(0x44)">F11</button>
+      <button class="vkb-key" onclick="vkbTap(0x45)">F12</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x46)">PrtSc</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x49)">Ins</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x4C)">Del</button>
+    </div>
+    <!-- Number row -->
+    <div class="vkb-row">
+      <button class="vkb-key" onclick="vkbTap(0x35)">`</button>
+      <button class="vkb-key" onclick="vkbTap(0x1E)">1</button>
+      <button class="vkb-key" onclick="vkbTap(0x1F)">2</button>
+      <button class="vkb-key" onclick="vkbTap(0x20)">3</button>
+      <button class="vkb-key" onclick="vkbTap(0x21)">4</button>
+      <button class="vkb-key" onclick="vkbTap(0x22)">5</button>
+      <button class="vkb-key" onclick="vkbTap(0x23)">6</button>
+      <button class="vkb-key" onclick="vkbTap(0x24)">7</button>
+      <button class="vkb-key" onclick="vkbTap(0x25)">8</button>
+      <button class="vkb-key" onclick="vkbTap(0x26)">9</button>
+      <button class="vkb-key" onclick="vkbTap(0x27)">0</button>
+      <button class="vkb-key" onclick="vkbTap(0x2D)">-</button>
+      <button class="vkb-key" onclick="vkbTap(0x2E)">=</button>
+      <button class="vkb-key w20" onclick="vkbTap(0x2A)">Bksp</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x4A)">Home</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x4D)">End</button>
+    </div>
+    <!-- QWERTY row -->
+    <div class="vkb-row">
+      <button class="vkb-key w16" onclick="vkbTap(0x2B)">Tab</button>
+      <button class="vkb-key" onclick="vkbTap(0x14)">Q</button>
+      <button class="vkb-key" onclick="vkbTap(0x1A)">W</button>
+      <button class="vkb-key" onclick="vkbTap(0x08)">E</button>
+      <button class="vkb-key" onclick="vkbTap(0x15)">R</button>
+      <button class="vkb-key" onclick="vkbTap(0x17)">T</button>
+      <button class="vkb-key" onclick="vkbTap(0x1C)">Y</button>
+      <button class="vkb-key" onclick="vkbTap(0x18)">U</button>
+      <button class="vkb-key" onclick="vkbTap(0x0C)">I</button>
+      <button class="vkb-key" onclick="vkbTap(0x12)">O</button>
+      <button class="vkb-key" onclick="vkbTap(0x13)">P</button>
+      <button class="vkb-key" onclick="vkbTap(0x2F)">[</button>
+      <button class="vkb-key" onclick="vkbTap(0x30)">]</button>
+      <button class="vkb-key" onclick="vkbTap(0x31)">\</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x4B)">PgUp</button>
+      <button class="vkb-key w14" onclick="vkbTap(0x4E)">PgDn</button>
+    </div>
+    <!-- ASDF row -->
+    <div class="vkb-row">
+      <button class="vkb-key modifier w20" id="vkb-caps" onclick="vkbCaps()">Caps</button>
+      <button class="vkb-key" onclick="vkbTap(0x04)">A</button>
+      <button class="vkb-key" onclick="vkbTap(0x16)">S</button>
+      <button class="vkb-key" onclick="vkbTap(0x07)">D</button>
+      <button class="vkb-key" onclick="vkbTap(0x09)">F</button>
+      <button class="vkb-key" onclick="vkbTap(0x0A)">G</button>
+      <button class="vkb-key" onclick="vkbTap(0x0B)">H</button>
+      <button class="vkb-key" onclick="vkbTap(0x0D)">J</button>
+      <button class="vkb-key" onclick="vkbTap(0x0E)">K</button>
+      <button class="vkb-key" onclick="vkbTap(0x0F)">L</button>
+      <button class="vkb-key" onclick="vkbTap(0x33)">;</button>
+      <button class="vkb-key" onclick="vkbTap(0x34)">'</button>
+      <button class="vkb-key w28" onclick="vkbTap(0x28)">Enter</button>
+    </div>
+    <!-- ZXCV row -->
+    <div class="vkb-row">
+      <button class="vkb-key modifier w28" id="vkb-shift" onclick="vkbMod('shift')">Shift</button>
+      <button class="vkb-key" onclick="vkbTap(0x1D)">Z</button>
+      <button class="vkb-key" onclick="vkbTap(0x1B)">X</button>
+      <button class="vkb-key" onclick="vkbTap(0x06)">C</button>
+      <button class="vkb-key" onclick="vkbTap(0x19)">V</button>
+      <button class="vkb-key" onclick="vkbTap(0x05)">B</button>
+      <button class="vkb-key" onclick="vkbTap(0x11)">N</button>
+      <button class="vkb-key" onclick="vkbTap(0x10)">M</button>
+      <button class="vkb-key" onclick="vkbTap(0x36)">,</button>
+      <button class="vkb-key" onclick="vkbTap(0x37)">.</button>
+      <button class="vkb-key" onclick="vkbTap(0x38)">/</button>
+      <button class="vkb-key modifier w28" id="vkb-shift2" onclick="vkbMod('shift')">Shift</button>
+    </div>
+    <!-- Control row -->
+    <div class="vkb-row">
+      <button class="vkb-key modifier w16" id="vkb-ctrl" onclick="vkbMod('ctrl')">Ctrl</button>
+      <button class="vkb-key modifier w14" id="vkb-alt" onclick="vkbMod('alt')">Alt</button>
+      <button class="vkb-key w60" onclick="vkbTap(0x2C)">Space</button>
+      <button class="vkb-key modifier w14" id="vkb-altgr" onclick="vkbMod('altgr')">AltGr</button>
+      <button class="vkb-key modifier w16" id="vkb-ctrl2" onclick="vkbMod('ctrl')">Ctrl</button>
+      <button class="vkb-key" onclick="vkbTap(0x50)">←</button>
+      <button class="vkb-key" onclick="vkbTap(0x52)">↑</button>
+      <button class="vkb-key" onclick="vkbTap(0x51)">↓</button>
+      <button class="vkb-key" onclick="vkbTap(0x4F)">→</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+
+{% block extra_js %}
+<script>
+/* ===== State ===== */
+let logBox = document.getElementById("log");
+let csrfToken = '';
+let isFullscreen = false;
+let mouseMode = 'absolute';       // 'absolute' or 'relative'
+let pointerLockEnabled = false;    // user preference
+let pointerLockActive = false;     // actual browser state
+let ws = null;
+let wsReconnectTimer = null;
+const MOUSE_ABS_MAX = 32767;
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+}
+
+/* ===== WebSocket Transport ===== */
+function wsSend(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+    return true;
+  }
+  return false;
+}
+
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  let proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/hid');
+
+  ws.onopen = () => {
+    log('WebSocket connected');
+    updateWsStatus(true);
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+  };
+
+  ws.onclose = () => {
+    updateWsStatus(false);
+    scheduleWsReconnect();
+  };
+
+  ws.onerror = () => {
+    updateWsStatus(false);
+  };
+
+  ws.onmessage = (evt) => {
+    try {
+      let data = JSON.parse(evt.data);
+      if (data.error) log('WS error: ' + data.error);
+    } catch(e) {}
+  };
+}
+
+function scheduleWsReconnect() {
+  if (wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    connectWebSocket();
+  }, 3000);
+}
+
+function updateWsStatus(connected) {
+  let el = document.getElementById('wsStatus');
+  if (connected) {
+    el.textContent = 'WS: ON';
+    el.className = 'ws-badge connected';
+  } else {
+    el.textContent = 'WS: OFF';
+    el.className = 'ws-badge disconnected';
+  }
+}
+
+/* ===== HTTP Fallback ===== */
+function httpSend(url, body) {
+  fetch(url, {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify(body)
+  }).catch(err => console.error('HTTP send error:', err));
+}
+
+/* ===== Unified Send ===== */
+function hidSend(wsMsg, httpUrl, httpBody) {
+  if (!wsSend(wsMsg)) {
+    httpSend(httpUrl || '/api/keyboard', httpBody || wsMsg);
+  }
+}
+
+/* ===== HID Keycode Map ===== */
+const codeToHID = {
+  'KeyA': 0x04, 'KeyB': 0x05, 'KeyC': 0x06, 'KeyD': 0x07, 'KeyE': 0x08,
+  'KeyF': 0x09, 'KeyG': 0x0A, 'KeyH': 0x0B, 'KeyI': 0x0C, 'KeyJ': 0x0D,
+  'KeyK': 0x0E, 'KeyL': 0x0F, 'KeyM': 0x10, 'KeyN': 0x11, 'KeyO': 0x12,
+  'KeyP': 0x13, 'KeyQ': 0x14, 'KeyR': 0x15, 'KeyS': 0x16, 'KeyT': 0x17,
+  'KeyU': 0x18, 'KeyV': 0x19, 'KeyW': 0x1A, 'KeyX': 0x1B, 'KeyY': 0x1C,
+  'KeyZ': 0x1D,
+  'Digit1': 0x1E, 'Digit2': 0x1F, 'Digit3': 0x20, 'Digit4': 0x21,
+  'Digit5': 0x22, 'Digit6': 0x23, 'Digit7': 0x24, 'Digit8': 0x25,
+  'Digit9': 0x26, 'Digit0': 0x27,
+  'Enter': 0x28, 'Escape': 0x29, 'Backspace': 0x2A, 'Tab': 0x2B,
+  'Space': 0x2C, 'Minus': 0x2D, 'Equal': 0x2E, 'BracketLeft': 0x2F,
+  'BracketRight': 0x30, 'Backslash': 0x31, 'Semicolon': 0x33,
+  'Quote': 0x34, 'Backquote': 0x35, 'Comma': 0x36, 'Period': 0x37,
+  'Slash': 0x38, 'CapsLock': 0x39,
+  'F1': 0x3A, 'F2': 0x3B, 'F3': 0x3C, 'F4': 0x3D, 'F5': 0x3E, 'F6': 0x3F,
+  'F7': 0x40, 'F8': 0x41, 'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
+  'PrintScreen': 0x46, 'ScrollLock': 0x47, 'Pause': 0x48,
+  'Insert': 0x49, 'Home': 0x4A, 'PageUp': 0x4B,
+  'Delete': 0x4C, 'End': 0x4D, 'PageDown': 0x4E,
+  'ArrowRight': 0x4F, 'ArrowLeft': 0x50, 'ArrowDown': 0x51, 'ArrowUp': 0x52,
+  'NumLock': 0x53
+};
+
+function getModifierByte(e) {
+  let mod = 0;
+  if (e.ctrlKey) mod |= 0x01;
+  if (e.shiftKey) mod |= 0x02;
+  if (e.altKey) mod |= 0x04;
+  if (e.metaKey) mod |= 0x08;
+  return mod;
+}
+
+/* ===== Lock Key State Tracking ===== */
+let lockKeyState = {
+  capslock: false,
+  numlock: false,
+  scrolllock: false
+};
+
+function updateLockKeyIndicators() {
+  // Update visual indicators based on lock key state
+  document.getElementById('capsLockIndicator').classList.toggle('active', lockKeyState.capslock);
+  document.getElementById('numLockIndicator').classList.toggle('active', lockKeyState.numlock);
+  document.getElementById('scrollLockIndicator').classList.toggle('active', lockKeyState.scrolllock);
+}
+
+function syncLockKeyState(e) {
+  // Track lock key state from keyboard events
+  if (e.code === 'CapsLock') {
+    lockKeyState.capslock = e.getModifierState('CapsLock');
+  } else if (e.code === 'NumLock') {
+    lockKeyState.numlock = e.getModifierState('NumLock');
+  } else if (e.code === 'ScrollLock') {
+    lockKeyState.scrolllock = e.getModifierState('ScrollLock');
+  }
+  updateLockKeyIndicators();
+}
+
+/* ===== Keyboard Capture ===== */
+document.addEventListener('keydown', (e) => {
+  syncLockKeyState(e);
+  if (document.activeElement && document.activeElement.id === 'textInput') return;
+  e.preventDefault();
+
+  const hid = resolveHID(e.code);
+  if (!hid) { log('Unmapped: ' + e.code); return; }
+
+  const mod = getModifierByte(e);
+  if (mod) {
+    hidSend(
+      { type: 'key_mod', keycode: hid, modifiers: mod },
+      '/api/keyboard',
+      { action: 'key_with_modifier', keycode: hid, modifiers: mod }
+    );
+  } else {
+    hidSend(
+      { type: 'key', keycode: hid, pressed: true },
+      '/api/keyboard',
+      { action: 'key', keycode: hid, pressed: true }
+    );
+  }
+  log('Key down: ' + e.code);
+});
+
+document.addEventListener('keyup', (e) => {
+  syncLockKeyState(e);
+  if (document.activeElement && document.activeElement.id === 'textInput') return;
+  e.preventDefault();
+
+  const hid = resolveHID(e.code);
+  if (!hid) return;
+
+  hidSend(
+    { type: 'key_release', keycode: hid },
+    '/api/keyboard',
+    { action: 'key', keycode: hid, pressed: false }
+  );
+});
+
+/* ===== Mouse Movement ===== */
+let videoPanel = document.getElementById('videoPanel');
+let videoImg = document.getElementById('videoStream');
+
+videoPanel.addEventListener('mousemove', (e) => {
+  if (mouseMode === 'absolute' && !pointerLockActive) {
+    // Absolute mode: map cursor position on video image to 0-32767
+    let rect = videoImg.getBoundingClientRect();
+    let relX = (e.clientX - rect.left) / rect.width;
+    let relY = (e.clientY - rect.top) / rect.height;
+    relX = Math.max(0, Math.min(1, relX));
+    relY = Math.max(0, Math.min(1, relY));
+    let absX = Math.round(relX * MOUSE_ABS_MAX);
+    let absY = Math.round(relY * MOUSE_ABS_MAX);
+
+    hidSend(
+      { type: 'mouse_move_abs', x: absX, y: absY },
+      '/api/mouse',
+      { action: 'move_abs', x: absX, y: absY }
+    );
+  } else {
+    // Relative mode (or pointer-locked): use movementX/Y deltas
+    let dx = e.movementX;
+    let dy = e.movementY;
+    if (dx === 0 && dy === 0) return;
+
+    hidSend(
+      { type: 'mouse_move', x: dx, y: dy },
+      '/api/mouse',
+      { action: 'move', x: dx, y: dy }
+    );
+  }
+});
+
+/* ===== Mouse Clicks ===== */
+// Direct clicks on video panel
+videoPanel.addEventListener('mousedown', (e) => {
+  if (!pointerLockActive && pointerLockEnabled) return; // first click requests lock
+  let btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
+  let btn = btnMap[e.button];
+  if (!btn) return;
+  e.preventDefault();
+  hidSend(
+    { type: 'mouse_click', button: btn, pressed: true },
+    '/api/mouse',
+    { action: 'click', button: btn, pressed: true }
+  );
+});
+
+videoPanel.addEventListener('mouseup', (e) => {
+  let btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
+  let btn = btnMap[e.button];
+  if (!btn) return;
+  e.preventDefault();
+  hidSend(
+    { type: 'mouse_click', button: btn, pressed: false },
+    '/api/mouse',
+    { action: 'click', button: btn, pressed: false }
+  );
+});
+
+videoPanel.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Button-panel click helpers (press + release after 50ms)
+function clickMouse(button) {
+  hidSend(
+    { type: 'mouse_click', button: button, pressed: true },
+    '/api/mouse',
+    { action: 'click', button: button, pressed: true }
+  );
+  setTimeout(() => {
+    hidSend(
+      { type: 'mouse_click', button: button, pressed: false },
+      '/api/mouse',
+      { action: 'click', button: button, pressed: false }
+    );
+  }, 50);
+  log('Mouse: ' + button);
+}
+
+/* ===== Quick Action Keys ===== */
+const quickKeyMap = {
+  'enter': 0x28, 'esc': 0x29, 'backspace': 0x2A, 'tab': 0x2B,
+  'capslock': 0x39, 'power': 0x66,
+  'f1': 0x3A, 'f2': 0x3B, 'f3': 0x3C, 'f4': 0x3D, 'f5': 0x3E, 'f6': 0x3F,
+  'f7': 0x40, 'f8': 0x41, 'f9': 0x42, 'f10': 0x43, 'f11': 0x44, 'f12': 0x45
+};
+
+function sendKey(key) {
+  if (key === 'ctrl_alt_del') {
+    hidSend(
+      { type: 'ctrl_alt_del' },
+      '/api/keyboard',
+      { action: 'ctrl_alt_del' }
+    );
+  } else if (quickKeyMap[key]) {
+    let kc = quickKeyMap[key];
+    hidSend(
+      { type: 'key', keycode: kc, pressed: true },
+      '/api/keyboard',
+      { action: 'key', keycode: kc, pressed: true }
+    );
+    setTimeout(() => {
+      hidSend(
+        { type: 'key_release', keycode: kc },
+        '/api/keyboard',
+        { action: 'key', keycode: kc, pressed: false }
+      );
+    }, 50);
+  }
+  log('Key: ' + key);
+}
+
+/* ===== Scroll Wheel ===== */
+function sendScroll(amount) {
+  hidSend(
+    { type: 'mouse_move', x: 0, y: 0, wheel: amount },
+    '/api/mouse',
+    { action: 'move', x: 0, y: 0, wheel: amount }
+  );
+  log('Scroll: ' + (amount > 0 ? 'down' : 'up'));
+}
+
+videoPanel.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  sendScroll(e.deltaY > 0 ? 3 : -3);
+}, { passive: false });
+
+/* ===== Text Input ===== */
+function sendText() {
+  let input = document.getElementById('textInput');
+  let text = input.value;
+  if (!text) return;
+  hidSend(
+    { type: 'text', text: text },
+    '/api/keyboard',
+    { action: 'text', text: text }
+  );
+  log('Text: ' + text);
+  input.value = '';
+}
+
+document.getElementById('textInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendText(); }
+});
+
+/* ===== Mouse Mode Toggle ===== */
+function setMouseMode(mode) {
+  mouseMode = mode;
+  document.getElementById('modeAbsolute').classList.toggle('active', mode === 'absolute');
+  document.getElementById('modeRelative').classList.toggle('active', mode === 'relative');
+  // Notify backend
+  hidSend(
+    { type: 'mouse_mode', mode: mode },
+    '/api/mouse/mode',
+    { mode: mode }
+  );
+  log('Mouse mode: ' + mode);
+}
+
+/* ===== Pointer Lock ===== */
+function togglePointerLock() {
+  pointerLockEnabled = !pointerLockEnabled;
+  let btn = document.getElementById('pointerLockBtn');
+  if (pointerLockEnabled) {
+    btn.textContent = 'Disable Pointer Lock';
+    log('Pointer lock enabled — click video to capture');
+  } else {
+    btn.textContent = 'Enable Pointer Lock';
+    if (document.pointerLockElement) document.exitPointerLock();
+    log('Pointer lock disabled');
+  }
+}
+
+videoPanel.addEventListener('click', (e) => {
+  if (pointerLockEnabled && !pointerLockActive) {
+    videoPanel.requestPointerLock();
+  }
+});
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLockActive = (document.pointerLockElement === videoPanel);
+  videoPanel.classList.toggle('pointer-locked', pointerLockActive);
+  if (pointerLockActive) {
+    log('Pointer locked');
+  } else {
+    log('Pointer released');
+  }
+});
+
+document.addEventListener('pointerlockerror', () => {
+  log('Pointer lock error');
+  pointerLockActive = false;
+});
+
+/* ===== Screenshot ===== */
+function takeScreenshot() {
+  log('Capturing screenshot...');
+  fetch('/api/screenshot', { headers: apiHeaders() })
+    .then(resp => {
+      if (!resp.ok) throw new Error('Screenshot failed: ' + resp.status);
+      let filename = 'kvm_screenshot.jpg';
+      let cd = resp.headers.get('Content-Disposition');
+      if (cd) {
+        let match = cd.match(/filename=(.+)/);
+        if (match) filename = match[1];
+      }
+      return resp.blob().then(blob => ({ blob, filename }));
+    })
+    .then(({ blob, filename }) => {
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      log('Screenshot saved');
+    })
+    .catch(err => {
+      console.error('Screenshot error:', err);
+      log('Screenshot failed');
+    });
+}
+
+/* ===== Fullscreen Toggle ===== */
+function toggleFullscreen() {
+  isFullscreen = !isFullscreen;
+  let vp = document.getElementById('videoPanel');
+  let exitBtn = document.getElementById('fullscreenExit');
+  if (isFullscreen) {
+    vp.classList.add('fullscreen');
+    exitBtn.style.display = 'block';
+  } else {
+    vp.classList.remove('fullscreen');
+    exitBtn.style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isFullscreen) {
+    toggleFullscreen();
+  }
+}, true);
+
+/* ===== UI Helpers ===== */
+function log(msg) {
+  let div = document.createElement('div');
+  div.textContent = msg;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+  if (logBox.children.length > 200) logBox.removeChild(logBox.firstChild);
+}
+
+/* ===== Keyboard Layouts ===== */
+const LAYOUTS = {
+  qwerty_us: {},  // default — codeToHID already maps physical codes
+  qwerty_uk: {
+    // UK differences: # on backslash key, etc.
+    // Physical codes are the same; HID codes are the same.
+    // The difference is character output on the target OS, not HID codes.
+  },
+  azerty_fr: {
+    // AZERTY remaps: physical A->Q, Z->W, Q->A, W->Z, M->;, etc.
+    // We remap physical e.code to the HID code the user expects.
+    'KeyA': 0x14, 'KeyQ': 0x04,  // A<->Q
+    'KeyZ': 0x1A, 'KeyW': 0x1D,  // Z<->W
+    'KeyM': 0x33,                 // M -> semicolon position
+    'Semicolon': 0x10,            // ; -> M
+  },
+  qwertz_de: {
+    // QWERTZ: Y<->Z swap
+    'KeyY': 0x1D, 'KeyZ': 0x1C,
+  },
+};
+
+let currentLayout = 'qwerty_us';
+
+function setKeyboardLayout(layout) {
+  currentLayout = layout;
+  log('Keyboard layout: ' + layout);
+}
+
+function resolveHID(code) {
+  let overrides = LAYOUTS[currentLayout] || {};
+  if (overrides[code] !== undefined) return overrides[code];
+  return codeToHID[code];
+}
+
+/* ===== Clipboard Sync ===== */
+document.addEventListener('paste', (e) => {
+  // Intercept paste (Ctrl+V) and send clipboard text to target
+  if (document.activeElement && document.activeElement.id === 'textInput') return;
+  e.preventDefault();
+  let text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text) return;
+  hidSend(
+    { type: 'text', text: text },
+    '/api/keyboard',
+    { action: 'text', text: text }
+  );
+  log('Clipboard paste: ' + text.length + ' chars');
+});
+
+/* ===== Video Quality ===== */
+function applyVideoQuality() {
+  let res = document.getElementById('vqRes').value;
+  let fps = document.getElementById('vqFps').value;
+  let br = document.getElementById('vqBitrate').value;
+  log('Applying video: ' + res + ' ' + fps + 'fps ' + br);
+
+  fetch('/api/video/quality', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ resolution: res, framerate: parseInt(fps), bitrate: br }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        log('Video quality applied — stream restarting');
+        // Reload the video stream after a short delay
+        setTimeout(() => {
+          let img = document.getElementById('videoStream');
+          img.src = '/stream?' + Date.now();
+        }, 1500);
+      } else {
+        log('Video quality error: ' + (data.error || 'unknown'));
+      }
+    })
+    .catch(err => log('Video quality failed: ' + err));
+}
+
+function syncVideoQualityUI(stats) {
+  if (!stats) return;
+  // Set dropdowns to match current server values
+  let resEl = document.getElementById('vqRes');
+  let fpsEl = document.getElementById('vqFps');
+  let brEl = document.getElementById('vqBitrate');
+  if (stats.resolution) {
+    for (let opt of resEl.options) {
+      if (opt.value === stats.resolution) { resEl.value = stats.resolution; break; }
+    }
+  }
+  if (stats.target_fps) {
+    let fpsStr = String(stats.target_fps);
+    for (let opt of fpsEl.options) {
+      if (opt.value === fpsStr) { fpsEl.value = fpsStr; break; }
+    }
+  }
+  if (stats.bitrate) {
+    for (let opt of brEl.options) {
+      if (opt.value === stats.bitrate) { brEl.value = stats.bitrate; break; }
+    }
+  }
+}
+
+/* ===== Video Stream Auto-Reconnect ===== */
+let videoStreamRetries = 0;
+const MAX_VIDEO_RETRIES = 5;
+const VIDEO_RETRY_DELAY = 2000; // 2 seconds
+
+function reconnectVideoStream() {
+  if (videoStreamRetries >= MAX_VIDEO_RETRIES) {
+    log('Video stream: max retries reached');
+    return;
+  }
+  
+  videoStreamRetries++;
+  let img = document.getElementById('videoStream');
+  let streamUrl = '/stream?' + Date.now() + '_retry' + videoStreamRetries;
+  
+  // Add a small random delay to avoid thundering herd
+  let delay = VIDEO_RETRY_DELAY + Math.random() * 1000;
+  setTimeout(() => {
+    img.src = streamUrl;
+    log('Video stream: reconnecting attempt ' + videoStreamRetries);
+  }, delay);
+}
+
+videoImg.addEventListener('load', () => {
+  videoStreamRetries = 0; // reset on successful load
+});
+
+videoImg.addEventListener('error', () => {
+  log('Video stream error: attempting reconnection');
+  reconnectVideoStream();
+});
+
+// Check stream health periodically
+setInterval(() => {
+  if (videoStreamRetries === 0 && videoImg.complete) {
+    // Stream is healthy
+  }
+}, 5000);
+
+/* ===== Idle Timeout Check ===== */
+setInterval(checkIdleTimeout, 1000);
+
+/* ===== Status Poll ===== */
+setInterval(pollStatus, 3000);
+let isRecording = false;
+
+function toggleRecording() {
+  let url = isRecording ? '/api/recording/stop' : '/api/recording/start';
+  fetch(url, { method: 'POST', headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        isRecording = !isRecording;
+        updateRecordingUI();
+        log(isRecording ? 'Recording started' : 'Recording stopped');
+      } else {
+        log('Recording error: ' + (data.error || 'unknown'));
+      }
+    })
+    .catch(err => log('Recording failed: ' + err));
+}
+
+function updateRecordingUI() {
+  let btn = document.getElementById('recordBtn');
+  let indicator = document.getElementById('recIndicator');
+  if (isRecording) {
+    btn.textContent = 'Stop Recording';
+    indicator.innerHTML = '<span class="rec-dot"></span> REC';
+  } else {
+    btn.textContent = 'Start Recording';
+    indicator.innerHTML = '';
+  }
+}
+
+/* ===== Connection Quality Indicators ===== */
+let latencyHistory = [];
+
+function measureLatency() {
+  let t0 = performance.now();
+  fetch('/api/ping', { headers: apiHeaders() })
+    .then(() => {
+      let ms = Math.round(performance.now() - t0);
+      latencyHistory.push(ms);
+      if (latencyHistory.length > 10) latencyHistory.shift();
+      let avg = Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length);
+
+      let el = document.getElementById('qiLatency');
+      el.textContent = avg + 'ms';
+      el.className = 'qi-val ' + (avg < 50 ? 'qi-good' : avg < 150 ? 'qi-warn' : 'qi-bad');
+    })
+    .catch(() => {
+      document.getElementById('qiLatency').textContent = '—';
+    });
+}
+
+function updateStreamStats(stats) {
+  if (!stats) return;
+  let fpsEl = document.getElementById('qiFps');
+  fpsEl.textContent = stats.fps;
+  fpsEl.className = 'qi-val ' + (stats.fps >= 10 ? 'qi-good' : stats.fps >= 5 ? 'qi-warn' : 'qi-bad');
+
+  let bwEl = document.getElementById('qiBw');
+  let kbps = Math.round(stats.bandwidth_bps / 1024);
+  if (kbps > 1024) {
+    bwEl.textContent = (kbps / 1024).toFixed(1) + ' MB/s';
+  } else {
+    bwEl.textContent = kbps + ' KB/s';
+  }
+}
+
+/* ===== Idle Timeout Warning ===== */
+let idleTimeout = 900;
+let lastActivity = Date.now();
+let idleWarningShown = false;
+
+function resetIdleTimer() {
+  lastActivity = Date.now();
+  if (idleWarningShown) {
+    document.getElementById('idleWarning').style.display = 'none';
+    idleWarningShown = false;
+  }
+}
+
+function checkIdleTimeout() {
+  if (idleTimeout <= 0) return;
+  let elapsed = (Date.now() - lastActivity) / 1000;
+  let warningThreshold = idleTimeout - 60; // warn 60s before timeout
+  if (elapsed > warningThreshold && !idleWarningShown) {
+    document.getElementById('idleWarning').style.display = 'block';
+    idleWarningShown = true;
+  }
+}
+
+// Track user activity
+['mousemove', 'keydown', 'mousedown', 'wheel', 'touchstart'].forEach(evt => {
+  document.addEventListener(evt, resetIdleTimer, { passive: true });
+});
+
+/* ===== Navigation ===== */
+function logout() { window.location.href = '/logout'; }
+
+/* ===== Status Polling ===== */
+let vqSynced = false;
+
+function pollStatus() {
+  fetch('/api/status', { headers: apiHeaders() })
+    .then(r => {
+      if (r.status === 401) {
+        // Idle-logged-out or session expired
+        window.location.href = '/login';
+        return null;
+      }
+      return r.json();
+    })
+    .then(data => {
+      if (!data) return;
+      csrfToken = data.csrf_token || csrfToken;
+      let statusEl = document.getElementById('statusIndicator');
+      let hidDot = data.hid_connected ? 'online' : 'offline';
+      let vidDot = data.video_running ? 'online' : 'offline';
+      statusEl.innerHTML =
+        '<span><span class="status-dot ' + hidDot + '"></span>HID</span>' +
+        '<span><span class="status-dot ' + vidDot + '"></span>Video</span>';
+
+      if (data.is_admin) {
+        let recBtn = document.getElementById('recordBtn');
+        if (recBtn) recBtn.hidden = false;
+      }
+
+      // Sync mouse mode from server on first poll
+      if (data.mouse_mode && data.mouse_mode !== mouseMode) {
+        setMouseMode(data.mouse_mode);
+      }
+
+      // Sync idle timeout
+      if (data.idle_timeout !== undefined) {
+        idleTimeout = data.idle_timeout;
+      }
+
+      // Sync recording state
+      if (data.recording !== undefined) {
+        isRecording = data.recording;
+        updateRecordingUI();
+      }
+
+      // Sync video quality dropdowns (once)
+      if (!vqSynced && data.stream_stats) {
+        syncVideoQualityUI(data.stream_stats);
+        vqSynced = true;
+      }
+
+      // Update stream stats indicators
+      if (data.stream_stats) {
+        updateStreamStats(data.stream_stats);
+      }
+    })
+    .catch(err => console.error('Status poll error:', err));
+}
+
+/* ===== Clipboard Paste ===== */
+async function pasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) { log('Clipboard is empty'); return; }
+    hidSend(
+      { type: 'text', text: text },
+      '/api/keyboard',
+      { action: 'text', text: text }
+    );
+    log('Clipboard paste: ' + text.length + ' chars');
+  } catch (err) {
+    log('Clipboard access denied — use Ctrl+V instead');
+  }
+}
+
+/* ===== Virtual Keyboard ===== */
+const vkbState = { shift: false, ctrl: false, alt: false, altgr: false };
+
+function toggleVkb() {
+  const overlay = document.getElementById('vkbOverlay');
+  overlay.classList.toggle('visible');
+  const btn = document.getElementById('vkbToggleBtn');
+  btn.textContent = overlay.classList.contains('visible') ? 'Hide Keyboard' : 'Virtual Keyboard';
+}
+
+function vkbMod(mod) {
+  vkbState[mod] = !vkbState[mod];
+  // Sync both shift buttons
+  if (mod === 'shift') {
+    document.getElementById('vkb-shift').classList.toggle('active', vkbState.shift);
+    document.getElementById('vkb-shift2').classList.toggle('active', vkbState.shift);
+  } else if (mod === 'ctrl') {
+    document.getElementById('vkb-ctrl').classList.toggle('active', vkbState.ctrl);
+    document.getElementById('vkb-ctrl2').classList.toggle('active', vkbState.ctrl);
+  } else {
+    const el = document.getElementById('vkb-' + mod);
+    if (el) el.classList.toggle('active', vkbState[mod]);
+  }
+}
+
+function vkbCaps() {
+  // Send CapsLock key tap immediately (no modifier needed)
+  hidSend(
+    { type: 'key', keycode: 0x39, pressed: true },
+    '/api/keyboard',
+    { action: 'key', keycode: 0x39, pressed: true }
+  );
+  setTimeout(() => hidSend(
+    { type: 'key_release', keycode: 0x39 },
+    '/api/keyboard',
+    { action: 'key', keycode: 0x39, pressed: false }
+  ), 50);
+  const el = document.getElementById('vkb-caps');
+  if (el) el.classList.toggle('active');
+}
+
+function vkbGetMods() {
+  let m = 0;
+  if (vkbState.ctrl)  m |= 0x01;
+  if (vkbState.shift) m |= 0x02;
+  if (vkbState.alt)   m |= 0x04;
+  if (vkbState.altgr) m |= 0x40;  // Right Alt
+  return m;
+}
+
+function vkbTap(hidCode) {
+  const mod = vkbGetMods();
+  if (mod) {
+    hidSend(
+      { type: 'key_mod', keycode: hidCode, modifiers: mod },
+      '/api/keyboard',
+      { action: 'key_with_modifier', keycode: hidCode, modifiers: mod }
+    );
+  } else {
+    hidSend(
+      { type: 'key', keycode: hidCode, pressed: true },
+      '/api/keyboard',
+      { action: 'key', keycode: hidCode, pressed: true }
+    );
+    setTimeout(() => hidSend(
+      { type: 'key_release', keycode: hidCode },
+      '/api/keyboard',
+      { action: 'key', keycode: hidCode, pressed: false }
+    ), 50);
+  }
+  // Auto-clear sticky shift after use
+  if (vkbState.shift) vkbMod('shift');
+}
+
+/* ===== Init ===== */
+log('Console loaded');
+pollStatus();
+setInterval(pollStatus, 5000);
+setInterval(measureLatency, 5000);
+setInterval(checkIdleTimeout, 10000);
+measureLatency();
+connectWebSocket();
+updateLockKeyIndicators();
+</script>
+{% endblock %}

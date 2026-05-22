@@ -1,0 +1,978 @@
+{% extends "base.html" %}
+
+{% block title %}PXE Boot Server — KVM-over-IP{% endblock %}
+
+{% block page_title %}PXE Boot Server{% endblock %}
+
+{% block page_subtitle %}
+<p class="page-subtitle">Configure and manage network boot images</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Override theme's card to use secondary bg, matching other pages */
+  .card {
+    background-color: var(--color-bg-secondary);
+  }
+
+  .page-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+  }
+
+  .card h2 {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: var(--text-base);
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--spacing-sm);
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: bold;
+  }
+
+  .status-badge.running {
+    background: var(--color-success);
+    color: white;
+  }
+
+  .status-badge.stopped {
+    background: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+
+  .btn-group {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+  }
+
+  .form-group {
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .form-group label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .form-group .help-text {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    margin-top: var(--spacing-xs);
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: var(--spacing-xs) var(--spacing-md);
+    font-size: var(--text-xs);
+  }
+
+  .info-grid .label {
+    color: var(--color-text-secondary);
+  }
+
+  .info-grid .value {
+    color: var(--color-text-primary);
+    word-break: break-all;
+  }
+
+  .image-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+  }
+
+  .image-table th {
+    text-align: left;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-weight: normal;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+  }
+
+  .image-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--color-bg-primary);
+  }
+
+  .image-table tr:hover td {
+    background: var(--color-bg-primary);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+  }
+
+  .upload-zone {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-2xl);
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-base);
+  }
+
+  .upload-zone:hover,
+  .upload-zone.dragover {
+    border-color: var(--color-primary);
+  }
+
+  .upload-zone p {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .upload-zone input[type="file"] {
+    display: none;
+  }
+
+  .upload-progress {
+    margin-top: var(--spacing-sm);
+    display: none;
+  }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--color-bg-primary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--color-primary);
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .progress-text {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+  }
+
+  .dep-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .dep-list li {
+    padding: var(--spacing-sm) 0;
+    font-size: var(--text-xs);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .dep-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dep-dot.ok { background: var(--color-success); }
+  .dep-dot.missing { background: var(--color-danger); }
+
+  .dep-msg {
+    font-size: var(--text-xs);
+    color: var(--color-danger);
+    margin-top: var(--spacing-xs);
+    padding-left: var(--spacing-md);
+  }
+
+  .log-box {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-sm);
+  }
+
+  /* Panel switching */
+  .pxe-panel { display: none; }
+  .pxe-panel.active { display: block; }
+
+  @media (max-width: 600px) {
+    .page-content {
+      padding: var(--spacing-sm);
+    }
+
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .btn-group {
+      flex-wrap: wrap;
+    }
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0;
+  }
+
+  .toggle-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-primary);
+  }
+
+  /* ---- OS Catalog panel ---- */
+  .catalog-category {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    margin: var(--spacing-md) 0 var(--spacing-xs) 0;
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .catalog-category:first-child {
+    margin-top: 0;
+  }
+
+  .catalog-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-xs);
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+
+  .catalog-entry:hover {
+    background: var(--color-bg-primary);
+  }
+
+  .catalog-entry input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .catalog-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .catalog-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .catalog-desc {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    line-height: 1.4;
+  }
+
+  /* ---- iPXE Terminal Preview ---- */
+  .ipxe-terminal {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 2px solid #333399;
+    user-select: none;
+  }
+
+  .ipxe-titlebar {
+    background: #0000aa;
+    color: #ffffff;
+    text-align: center;
+    padding: 5px 14px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #5555ff;
+  }
+
+  .ipxe-body {
+    background: #000055;
+    color: #ffffff;
+    padding: 6px 0;
+    min-height: 60px;
+  }
+
+  .ipxe-item {
+    padding: 1px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ipxe-arrow {
+    display: inline-block;
+    width: 1.5em;
+    color: #aaaaff;
+  }
+
+  .ipxe-item-default {
+    background: #aaaaaa;
+    color: #000000;
+  }
+
+  .ipxe-item-default .ipxe-arrow {
+    color: #000055;
+  }
+
+  .ipxe-gap {
+    padding: 1px 8px;
+    color: #aaaaff;
+    white-space: nowrap;
+  }
+
+  .ipxe-statusbar {
+    background: #0000aa;
+    color: #aaaaff;
+    padding: 4px 14px;
+    font-size: 11px;
+    border-top: 2px solid #5555ff;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Status Panel -->
+<div class="pxe-panel" id="panel-status">
+  <div class="card" id="statusCard">
+    <h2>Server Status</h2>
+    <div class="info-grid" id="statusGrid">
+      <span class="label">State</span>
+      <span class="value" id="pxeState"><span class="status-badge stopped">Loading...</span></span>
+      <span class="label">Server IP</span>
+      <span class="value" id="pxeServerIp">—</span>
+      <span class="label">Interface</span>
+      <span class="value" id="pxeInterface">—</span>
+      <span class="label">DHCP Range</span>
+      <span class="value" id="pxeDhcpRange">—</span>
+      <span class="label">Images</span>
+      <span class="value" id="pxeImageCount">—</span>
+      <span class="label">netboot.xyz</span>
+      <span class="value" id="pxeNetbootXyz">—</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="startBtn" onclick="startPXE()">Start Server</button>
+      <button class="btn btn-danger" id="stopBtn" onclick="stopPXE()" style="display:none">Stop Server</button>
+      <button class="btn btn-secondary" onclick="refreshStatus()">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Boot Menu Preview -->
+  <div class="card" style="margin-top:var(--spacing-md)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--spacing-sm)">
+      <h2 style="margin-bottom:0">Boot Menu Preview</h2>
+      <button class="btn btn-secondary" onclick="loadMenuPreview()">Refresh Preview</button>
+    </div>
+    <p style="font-size:var(--text-xs);color:var(--color-text-secondary);margin:0 0 var(--spacing-sm)">
+      Simulated iPXE terminal &mdash; this is what the target machine will see at boot.
+    </p>
+    <div id="menuPreview"><div class="empty-state" style="padding:var(--spacing-md)">Click Refresh Preview to load.</div></div>
+  </div>
+</div><!-- end panel-status -->
+
+<!-- Boot Images Panel -->
+<div class="pxe-panel" id="panel-images">
+  <div class="card">
+    <h2>Boot Images</h2>
+    <div id="imageList">
+      <div class="empty-state">Loading...</div>
+    </div>
+    <div class="upload-zone" id="uploadZone">
+      <p>Click or drag &amp; drop an ISO / image file to upload</p>
+      <input type="file" id="fileInput" accept=".iso,.img,.raw,.efi,.bin">
+    </div>
+    <div class="upload-progress" id="uploadProgress">
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">Uploading...</div>
+    </div>
+  </div>
+</div><!-- end panel-images -->
+
+<!-- Configuration Panel -->
+<div class="pxe-panel" id="panel-config">
+  <div class="card">
+    <h2>Network</h2>
+    <div class="form-group">
+      <label for="cfgInterface">Network Interface</label>
+      <input type="text" id="cfgInterface" placeholder="e.g. eth0 (leave blank for all)">
+      <div class="help-text">The network interface for PXE traffic. Leave blank to listen on all interfaces.</div>
+    </div>
+    <div class="form-group">
+      <label for="cfgDhcpRange">DHCP Proxy Range</label>
+      <input type="text" id="cfgDhcpRange" placeholder="e.g. 192.168.1.0">
+      <div class="help-text">Subnet for proxy DHCP. dnsmasq won't assign IPs — it only appends PXE boot info alongside your existing DHCP server.</div>
+    </div>
+    <div class="form-group">
+      <label for="cfgServerIp">Server IP Address</label>
+      <input type="text" id="cfgServerIp" placeholder="auto-detect">
+      <div class="help-text">IP of this KVM machine on the PXE network. Auto-detected if blank.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: var(--spacing-md)">
+    <h2>netboot.xyz — Remote OS Menu</h2>
+    <div class="form-group">
+      <label class="toggle-label">
+        <input type="checkbox" id="cfgNetbootEnabled">
+        <span>Include netboot.xyz in boot menu</span>
+      </label>
+      <div class="help-text">Adds a menu entry that chainloads <strong>netboot.xyz</strong> — giving the target machine access to 60+ OS installers and utilities over the internet, with no local storage required.</div>
+    </div>
+    <div id="netbootUrlFields">
+      <div class="form-group">
+        <label for="cfgNetbootUrl">BIOS URL</label>
+        <input type="text" id="cfgNetbootUrl" placeholder="https://boot.netboot.xyz/ipxe/netboot.xyz.lkrn">
+        <div class="help-text">iPXE chainload URL for Legacy BIOS clients. Use the default unless you're self-hosting netboot.xyz.</div>
+      </div>
+      <div class="form-group">
+        <label for="cfgNetbootEfiUrl">UEFI URL</label>
+        <input type="text" id="cfgNetbootEfiUrl" placeholder="https://boot.netboot.xyz/ipxe/netboot.xyz.efi">
+        <div class="help-text">iPXE chainload URL for UEFI clients.</div>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+    </div>
+  </div>
+</div><!-- end panel-config -->
+
+<!-- Dependencies Panel -->
+<div class="pxe-panel" id="panel-deps">
+  <div class="card">
+    <h2>System Dependencies</h2>
+    <ul class="dep-list" id="depList">
+      <li>Checking...</li>
+    </ul>
+  </div>
+</div><!-- end panel-deps -->
+
+<!-- Activity Log Panel -->
+<div class="pxe-panel" id="panel-log">
+  <div class="card">
+    <h2>Activity Log</h2>
+    <div class="log-box" id="logBox"></div>
+  </div>
+</div><!-- end panel-log -->
+
+<!-- OS Catalog Panel -->
+<div class="pxe-panel" id="panel-catalog">
+  <div class="card">
+    <h2>OS Catalog</h2>
+    <p style="font-size:var(--text-sm);color:var(--color-text-secondary);margin-bottom:var(--spacing-md)">
+      Select OS installers to include in the PXE boot menu.
+      Kernel and initrd files are fetched directly from official upstream mirrors
+      at boot time &mdash; nothing is stored on this server.
+    </p>
+    <div id="catalogList"><div class="empty-state">Loading catalog&hellip;</div></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveCatalog()">Save Boot Menu</button>
+    </div>
+  </div>
+</div><!-- end panel-catalog -->
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let csrfToken = '';
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+}
+
+function log(msg) {
+  let box = document.getElementById('logBox');
+  let d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 200) box.removeChild(box.firstChild);
+}
+
+/* ===== Status ===== */
+function refreshStatus() {
+  // Fetch CSRF token from status API
+  fetch('/api/status', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => { csrfToken = data.csrf_token || csrfToken; })
+    .catch(() => {});
+
+  // PXE status
+  fetch('/api/pxe/status', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      let running = data.running;
+      document.getElementById('pxeState').innerHTML = running
+        ? '<span class="status-badge running">Running</span>'
+        : '<span class="status-badge stopped">Stopped</span>';
+      document.getElementById('pxeServerIp').textContent = data.server_ip || '—';
+      document.getElementById('pxeInterface').textContent = data.interface || '—';
+      document.getElementById('pxeDhcpRange').textContent = data.dhcp_range || '—';
+      document.getElementById('pxeImageCount').textContent = data.image_count;
+
+      document.getElementById('startBtn').style.display = running ? 'none' : '';
+      document.getElementById('stopBtn').style.display = running ? '' : 'none';
+    })
+    .catch(err => {
+      console.error('Status error:', err);
+      document.getElementById('pxeState').innerHTML = '<span class="status-badge stopped">Error</span>';
+    });
+
+  loadConfig();
+  loadImages();
+  checkDeps();
+}
+
+/* ===== Start / Stop ===== */
+function startPXE() {
+  log('Starting PXE server...');
+  fetch('/api/pxe/start', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') log('PXE server started');
+      else log('Error: ' + (data.error || 'unknown'));
+      refreshStatus();
+    })
+    .catch(err => log('Start failed: ' + err));
+}
+
+function stopPXE() {
+  log('Stopping PXE server...');
+  fetch('/api/pxe/stop', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') log('PXE server stopped');
+      else log('Error: ' + (data.error || 'unknown'));
+      refreshStatus();
+    })
+    .catch(err => log('Stop failed: ' + err));
+}
+
+/* ===== Configuration ===== */
+function loadConfig() {
+  fetch('/api/pxe/config', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('cfgInterface').value = data.interface || '';
+      document.getElementById('cfgDhcpRange').value = data.dhcp_range || '';
+      document.getElementById('cfgServerIp').value = data.server_ip || '';
+
+      const enabled = data.netbootxyz_enabled !== false;
+      document.getElementById('cfgNetbootEnabled').checked = enabled;
+      document.getElementById('netbootUrlFields').style.display = enabled ? '' : 'none';
+      document.getElementById('cfgNetbootUrl').value = data.netbootxyz_url || '';
+      document.getElementById('cfgNetbootEfiUrl').value = data.netbootxyz_efi_url || '';
+
+      // Update the status panel netboot.xyz row
+      const el = document.getElementById('pxeNetbootXyz');
+      if (el) el.textContent = enabled ? 'Enabled' : 'Disabled';
+    })
+    .catch(() => {});
+}
+
+function saveConfig() {
+  let payload = {
+    interface: document.getElementById('cfgInterface').value.trim(),
+    dhcp_range: document.getElementById('cfgDhcpRange').value.trim(),
+    server_ip: document.getElementById('cfgServerIp').value.trim(),
+    netbootxyz_enabled: document.getElementById('cfgNetbootEnabled').checked,
+    netbootxyz_url: document.getElementById('cfgNetbootUrl').value.trim(),
+    netbootxyz_efi_url: document.getElementById('cfgNetbootEfiUrl').value.trim(),
+  };
+  fetch('/api/pxe/config', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        log('Configuration saved. Restart server to apply changes.');
+        loadMenuPreview();
+      } else {
+        log('Config error: ' + (data.error || 'unknown'));
+      }
+    })
+    .catch(err => log('Save config failed: ' + err));
+}
+
+/* ===== Images ===== */
+function loadImages() {
+  fetch('/api/pxe/images', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      let container = document.getElementById('imageList');
+      let images = data.images || [];
+      if (images.length === 0) {
+        container.innerHTML = '<div class="empty-state">No boot images uploaded yet.</div>';
+        return;
+      }
+      let html = '<table class="image-table"><thead><tr>' +
+        '<th>Name</th><th>Size</th><th>Type</th><th></th>' +
+        '</tr></thead><tbody>';
+      images.forEach(img => {
+        html += '<tr>' +
+          '<td>' + escHtml(img.name) + '</td>' +
+          '<td>' + escHtml(img.size_human) + '</td>' +
+          '<td>' + escHtml(img.boot_type) + '</td>' +
+          '<td><button class="btn btn-danger" onclick="deleteImage(\'' +
+          escHtml(img.name) + '\')">Delete</button></td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    })
+    .catch(err => {
+      document.getElementById('imageList').innerHTML = '<div class="empty-state">Failed to load images.</div>';
+    });
+}
+
+function deleteImage(name) {
+  if (!confirm('Delete image "' + name + '"?')) return;
+  fetch('/api/pxe/images/' + encodeURIComponent(name), {
+    method: 'DELETE',
+    headers: apiHeaders(),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') log('Deleted: ' + name);
+      else log('Delete error: ' + (data.error || 'unknown'));
+      loadImages();
+    })
+    .catch(err => log('Delete failed: ' + err));
+}
+
+/* ===== Upload ===== */
+let uploadZone = document.getElementById('uploadZone');
+let fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) uploadFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) uploadFile(fileInput.files[0]);
+});
+
+function uploadFile(file) {
+  log('Uploading: ' + file.name + ' (' + formatSize(file.size) + ')');
+  let progressDiv = document.getElementById('uploadProgress');
+  let progressFill = document.getElementById('progressFill');
+  let progressText = document.getElementById('progressText');
+  progressDiv.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Uploading... 0%';
+
+  let formData = new FormData();
+  formData.append('file', file);
+
+  let xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/pxe/images/upload');
+  xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      let pct = Math.round((e.loaded / e.total) * 100);
+      progressFill.style.width = pct + '%';
+      progressText.textContent = 'Uploading... ' + pct + '%';
+    }
+  };
+
+  xhr.onload = () => {
+    progressDiv.style.display = 'none';
+    fileInput.value = '';
+    try {
+      let data = JSON.parse(xhr.responseText);
+      if (data.status === 'ok') {
+        log('Upload complete: ' + data.image.name);
+      } else {
+        log('Upload error: ' + (data.error || 'unknown'));
+      }
+    } catch (e) {
+      log('Upload error: bad response');
+    }
+    loadImages();
+  };
+
+  xhr.onerror = () => {
+    progressDiv.style.display = 'none';
+    fileInput.value = '';
+    log('Upload failed: network error');
+  };
+
+  xhr.send(formData);
+}
+
+/* ===== Dependencies ===== */
+function checkDeps() {
+  fetch('/api/pxe/dependencies', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      let list = document.getElementById('depList');
+      let html = '';
+
+      html += depItem('dnsmasq', data.dnsmasq);
+      html += depItem('iPXE BIOS (undionly.kpxe)', data.ipxe_bios);
+      html += depItem('iPXE EFI (ipxe.efi)', data.ipxe_efi);
+
+      if (data.messages && data.messages.length) {
+        data.messages.forEach(m => {
+          html += '<li class="dep-msg">' + escHtml(m) + '</li>';
+        });
+      }
+
+      list.innerHTML = html;
+    })
+    .catch(() => {
+      document.getElementById('depList').innerHTML = '<li>Failed to check dependencies.</li>';
+    });
+}
+
+function depItem(name, ok) {
+  let dot = ok ? '<span class="dep-dot ok"></span>' : '<span class="dep-dot missing"></span>';
+  let status = ok ? 'Installed' : 'Missing';
+  return '<li>' + dot + ' <strong>' + escHtml(name) + '</strong>: ' + status + '</li>';
+}
+
+/* ===== Helpers ===== */
+function escHtml(s) {
+  let d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function formatSize(bytes) {
+  let units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+  return bytes.toFixed(1) + ' ' + units[i];
+}
+
+/* ===== Boot Menu Preview ===== */
+const loadMenuPreview = (window.loadMenuPreview = function() {
+  const container = document.getElementById('menuPreview');
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state" style="padding:var(--spacing-md)">Loading\u2026</div>';
+  fetch('/api/pxe/menu-preview', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        container.innerHTML = '<div class="empty-state" style="padding:var(--spacing-md)">Not available: ' + escHtml(data.error) + '</div>';
+        return;
+      }
+      container.innerHTML = renderIPXETerminal(parseBootScript(data.script));
+    })
+    .catch(() => {
+      container.innerHTML = '<div class="empty-state" style="padding:var(--spacing-md)">Failed to load preview.</div>';
+    });
+});
+
+function parseBootScript(script) {
+  const lines = script.split('\n');
+  let title = 'KVM-over-IP PXE Boot Menu';
+  let timeoutSec = 30;
+  let defaultLabel = '';
+  const items = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line === '#!ipxe' || line.startsWith(':') ||
+        line.startsWith('choose') || line.startsWith('goto')) continue;
+    if (line.startsWith('menu ')) {
+      title = line.slice(5).trim();
+    } else if (line.startsWith('set menu-timeout ')) {
+      const ms = parseInt(line.slice(17).trim(), 10);
+      if (!isNaN(ms)) timeoutSec = Math.round(ms / 1000);
+    } else if (line.startsWith('set menu-default ')) {
+      defaultLabel = line.slice(17).trim();
+    } else if (line === 'item --gap --') {
+      items.push({ type: 'gap', text: '' });
+    } else if (line.startsWith('item --gap -- ')) {
+      items.push({ type: 'gap', text: line.slice(14).trim() });
+    } else if (line.startsWith('item ')) {
+      const rest = line.slice(5).trim();
+      const sp = rest.search(/\s/);
+      if (sp === -1) continue;
+      items.push({ type: 'item', label: rest.slice(0, sp), text: rest.slice(sp).trim() });
+    }
+  }
+  return { title, timeoutSec, defaultLabel, items };
+}
+
+function renderIPXETerminal(parsed) {
+  const { title, timeoutSec, defaultLabel, items } = parsed;
+  let rows = '';
+  items.forEach(item => {
+    if (item.type === 'gap') {
+      rows += '<div class="ipxe-gap">' + (item.text ? '\u2500\u2500 ' + escHtml(item.text) : '') + '</div>';
+    } else {
+      const isDefault = item.label === defaultLabel;
+      const cls = isDefault ? 'ipxe-item ipxe-item-default' : 'ipxe-item';
+      const arrow = isDefault ? '\u25B6' : ' ';
+      rows += '<div class="' + cls + '"><span class="ipxe-arrow">' + arrow + ' </span>' + escHtml(item.text) + '</div>';
+    }
+  });
+  const timeoutStr = timeoutSec > 0
+    ? 'Automatic boot in ' + timeoutSec + 's  \u2014  default: ' + escHtml(defaultLabel || 'none')
+    : 'No automatic boot timeout';
+  if (!rows) rows = '<div class="ipxe-gap" style="padding:12px 8px">No menu entries configured.</div>';
+  return '<div class="ipxe-terminal">'
+    + '<div class="ipxe-titlebar">' + escHtml(title) + '</div>'
+    + '<div class="ipxe-body">' + rows + '</div>'
+    + '<div class="ipxe-statusbar">' + timeoutStr + '</div>'
+    + '</div>';
+}
+
+/* ===== OS Catalog ===== */
+const loadCatalog = (window.loadCatalog = function() {
+  fetch('/api/pxe/catalog', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const list = document.getElementById('catalogList');
+      if (!data.catalog || data.catalog.length === 0) {
+        list.innerHTML = '<div class="empty-state">No catalog entries available.</div>';
+        return;
+      }
+      // Group entries by category
+      const groups = {};
+      data.catalog.forEach(entry => {
+        const cat = entry.category || 'Other';
+        (groups[cat] = groups[cat] || []).push(entry);
+      });
+      let html = '';
+      Object.keys(groups).forEach(cat => {
+        html += `<div class="catalog-category">${cat}</div>`;
+        groups[cat].forEach(entry => {
+          const chk = entry.enabled ? 'checked' : '';
+          const id = 'cat_cb_' + entry.id;
+          html += `<label class="catalog-entry" for="${id}">`;
+          html += `<input type="checkbox" id="${id}" name="catalog-id" value="${entry.id}" ${chk}>`;
+          html += `<div class="catalog-info">`;
+          html += `<span class="catalog-name">${entry.name}</span>`;
+          html += `<span class="catalog-desc">${entry.description}</span>`;
+          html += `</div></label>`;
+        });
+      });
+      list.innerHTML = html;
+    })
+    .catch(err => log('Load catalog failed: ' + err));
+});
+
+const saveCatalog = (window.saveCatalog = function() {
+  const checked = Array.from(
+    document.querySelectorAll('input[name="catalog-id"]:checked')
+  ).map(cb => cb.value);
+  fetch('/api/pxe/catalog/enabled', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ enabled_ids: checked })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        log('Boot menu updated: ' + checked.length + ' catalog entries enabled.');
+        refreshStatus();
+        loadMenuPreview();
+      } else {
+        log('Error saving catalog: ' + (data.error || 'unknown'));
+      }
+    })
+    .catch(err => log('Save catalog failed: ' + err));
+});
+
+const PXE_PANEL_TITLES = {
+  status: 'Server Status',
+  images: 'Boot Images',
+  config: 'Configuration',
+  deps: 'Dependencies',
+  log: 'Activity Log',
+  catalog: 'OS Catalog'
+};
+
+const showPanel = (window.showPanel = function(id) {
+  document.querySelectorAll('.pxe-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('panel-' + id);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.pxe-nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.panel === id);
+  });
+  const sub = document.querySelector('.page-subtitle');
+  if (sub && PXE_PANEL_TITLES[id]) sub.textContent = PXE_PANEL_TITLES[id];
+  history.replaceState(null, '', '#' + id);
+  if (id === 'catalog') loadCatalog();
+  if (id === 'status') loadMenuPreview();
+});
+
+window.addEventListener('hashchange', () => {
+  showPanel(location.hash.replace('#', '') || 'status');
+});
+
+/* ===== Init ===== */
+refreshStatus();
+setInterval(refreshStatus, 15000);
+(function initPanels() {
+  const hash = location.hash.replace('#', '') || 'status';
+  showPanel(hash);
+
+  // Toggle netboot.xyz URL fields visibility when checkbox changes
+  const cb = document.getElementById('cfgNetbootEnabled');
+  if (cb) {
+    cb.addEventListener('change', () => {
+      document.getElementById('netbootUrlFields').style.display = cb.checked ? '' : 'none';
+    });
+  }
+})();
+</script>
+{% endblock %}

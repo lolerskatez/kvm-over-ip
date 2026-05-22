@@ -1,0 +1,84 @@
+services:
+  kvm-over-ip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kvm-over-ip
+    restart: unless-stopped
+    
+    ports:
+      - "80:8000"
+    
+    volumes:
+      # Application logs
+      - kvm-logs:/var/log/kvm-over-ip
+      
+      # Session and config data (persistent)
+      - kvm-data:/var/lib/kvm
+    
+    # USB and video device access (uncomment for hardware deployment)
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/video0:/dev/video0     # Video capture device
+      - /dev/video1:/dev/video1     # Additional video device
+    
+    # Required for USB device access
+    privileged: true
+    
+    environment:
+      # Container flag (disables user switching in gunicorn)
+      - CONTAINER=1
+      
+      # Set production mode (optional, adjust as needed)
+      - PRODUCTION=1
+      
+      # Flask configuration
+      - FLASK_ENV=production
+      
+      # You can set SECRET_KEY here or let the app generate/persist one
+      # Uncomment and set a strong key for production
+      # - SECRET_KEY=your-long-random-secret-key-here
+      
+      # Database/session store path (if applicable)
+      # - SESSION_STORE_PATH=/var/lib/kvm/sessions.json
+    
+    # Resource limits (adjust as needed)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 512M
+    
+    # Note: host networking disabled - Docker bridge networking is more portable
+    # Uncomment below only if you need direct host access (not recommended for production)
+    # network_mode: host
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  kvm-logs:
+    driver: local
+  
+  kvm-data:
+    driver: local
+
+# Uncomment to create a custom network (optional)
+# networks:
+#   kvm-network:
+#     driver: bridge

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="KVM-over-IP - Lightweight Remote Console System">
+    <title>{% block title %}KVM-over-IP{% endblock %}</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}">
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%230066cc' width='32' height='32' rx='4'/><text x='50%' y='50%' font-size='20' font-weight='bold' fill='white' text-anchor='middle' dy='.3em'>KV</text></svg>">
+</head>
+<body>
+    <!-- Header (Primary Navigation) -->
+    <header class="header">
+        <div class="header-left">
+            <button class="nav-toggle" aria-label="Toggle navigation"><span class="icon icon-md icon-menu"></span></button>
+            <a href="{{ url_for('dashboard_page') }}" class="header-brand">
+                <div class="header-brand-icon">KV</div>
+                <span>KVM-over-IP</span>
+            </a>
+            <nav class="header-nav">
+                <a href="{{ url_for('dashboard_page') }}" class="{% if request.endpoint == 'dashboard_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-dashboard"></span><span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('console') }}" class="{% if request.endpoint == 'console' %}active{% endif %}">
+                    <span class="icon icon-sm icon-terminal"></span><span>Console</span>
+                </a>
+                <a href="{{ url_for('wake_on_lan_page') }}" class="{% if request.endpoint == 'wake_on_lan_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-zap"></span><span>Wake-on-LAN</span>
+                </a>
+                <a href="{{ url_for('pxe_page') }}" class="{% if request.endpoint == 'pxe_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-globe"></span><span>PXE</span>
+                </a>
+                <a href="{{ url_for('settings_page') }}" class="{% if request.endpoint == 'settings_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-settings"></span><span>Settings</span>
+                </a>
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                <a href="{{ url_for('users_page') }}" class="{% if request.endpoint == 'users_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-users"></span><span>Users</span>
+                </a>
+                {% endif %}
+                {% if current_user.is_authenticated and current_role != 'viewer' %}
+                <a href="{{ url_for('recordings_page') }}" class="{% if request.endpoint == 'recordings_page' %}active{% endif %}">
+                    <span class="icon icon-sm icon-monitor"></span><span>Recordings</span>
+                </a>
+                {% endif %}
+            </nav>
+        </div>
+        
+        <div class="header-right">
+            <div class="header-actions">
+                <button class="theme-toggle" aria-label="Toggle theme"><span class="icon icon-md icon-moon"></span></button>
+                <div class="user-menu">
+                    <button class="user-profile">
+                        <div class="user-avatar">{{ current_user.username[0].upper() if current_user.is_authenticated else 'U' }}</div>
+                        <div class="user-info">
+                            <span class="user-name">{{ current_user.username if current_user.is_authenticated else 'User' }}</span>
+                            <span class="user-role">{% if current_user.is_authenticated %}{% if current_role == 'admin' %}Administrator{% elif current_role == 'operator' %}Operator{% elif current_role == 'viewer' %}Viewer{% else %}User{% endif %}{% endif %}</span>
+                        </div>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button onclick="location.href='{{ url_for('logout') }}'"><span class="icon icon-sm icon-log-out"></span> Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <div class="main">
+        <!-- Sidebar (Secondary / Contextual Navigation) -->
+        {% if request.endpoint not in ['dashboard_page', 'console', 'recordings_page'] %}
+        <aside class="sidebar" id="sidebar">
+            {% if request.endpoint == 'wake_on_lan_page' %}
+
+            <div class="sidebar-header">Wake-on-LAN</div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Actions</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#send" class="sidebar-link wol-nav-link" data-panel="send" onclick="showPanel('send');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-zap"></span></span>
+                        <span>Send Packet</span>
+                    </a></li>
+                    <li><a href="#devices" class="sidebar-link wol-nav-link" data-panel="devices" onclick="showPanel('devices');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-server"></span></span>
+                        <span>Devices</span>
+                    </a></li>
+                    <li><a href="#schedules" class="sidebar-link wol-nav-link" data-panel="schedules" onclick="showPanel('schedules');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-clock"></span></span>
+                        <span>Schedules</span>
+                    </a></li>
+                    <li><a href="#advanced" class="sidebar-link wol-nav-link" data-panel="advanced" onclick="showPanel('advanced');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-settings"></span></span>
+                        <span>Advanced</span>
+                    </a></li>
+                </ul>
+            </div>
+
+            {% elif request.endpoint == 'pxe_page' %}
+
+            <div class="sidebar-header">PXE</div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Manage</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#status" class="sidebar-link pxe-nav-link" data-panel="status" onclick="showPanel('status');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-activity"></span></span>
+                        <span>Server Status</span>
+                    </a></li>
+                    <li><a href="#images" class="sidebar-link pxe-nav-link" data-panel="images" onclick="showPanel('images');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-hard-drive"></span></span>
+                        <span>Boot Images</span>
+                    </a></li>
+                    <li><a href="#config" class="sidebar-link pxe-nav-link" data-panel="config" onclick="showPanel('config');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-settings"></span></span>
+                        <span>Configuration</span>
+                    </a></li>
+                    <li><a href="#deps" class="sidebar-link pxe-nav-link" data-panel="deps" onclick="showPanel('deps');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-server"></span></span>
+                        <span>Dependencies</span>
+                    </a></li>
+                    <li><a href="#catalog" class="sidebar-link pxe-nav-link" data-panel="catalog" onclick="showPanel('catalog');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-globe"></span></span>
+                        <span>OS Catalog</span>
+                    </a></li>
+                    <li><a href="#log" class="sidebar-link pxe-nav-link" data-panel="log" onclick="showPanel('log');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-terminal"></span></span>
+                        <span>Activity Log</span>
+                    </a></li>
+                </ul>
+            </div>
+
+            {% elif request.endpoint == 'settings_page' %}
+
+            <div class="sidebar-header">Settings</div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Configure</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#device" class="sidebar-link settings-nav-link" data-panel="device" onclick="showPanel('device');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-monitor"></span></span>
+                        <span>Device</span>
+                    </a></li>
+                    <li><a href="#security" class="sidebar-link settings-nav-link" data-panel="security" onclick="showPanel('security');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-settings"></span></span>
+                        <span>Security</span>
+                    </a></li>
+                    <li><a href="#session" class="sidebar-link settings-nav-link" data-panel="session" onclick="showPanel('session');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-clock"></span></span>
+                        <span>Session</span>
+                    </a></li>
+                    <li><a href="#notifications" class="sidebar-link settings-nav-link" data-panel="notifications" onclick="showPanel('notifications');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-bell"></span></span>
+                        <span>Notifications</span>
+                    </a></li>
+                    <li><a href="#network" class="sidebar-link settings-nav-link" data-panel="network" onclick="showPanel('network');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-network"></span></span>
+                        <span>Network</span>
+                    </a></li>
+                    <li><a href="#sso" class="sidebar-link settings-nav-link" data-panel="sso" onclick="showPanel('sso');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-settings"></span></span>
+                        <span>SSO</span>
+                    </a></li>
+                    <li><a href="#system" class="sidebar-link settings-nav-link" data-panel="system" onclick="showPanel('system');return false;">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-server"></span></span>
+                        <span>System</span>
+                    </a></li>
+                </ul>
+            </div>
+
+            {% elif request.endpoint == 'users_page' %}
+
+            <div class="sidebar-header">Users</div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Administration</div>
+                <ul class="sidebar-menu">
+                    <li><a href="{{ url_for('users_page') }}" class="sidebar-link active">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-users"></span></span>
+                        <span>User Management</span>
+                    </a></li>
+                </ul>
+            </div>
+
+            {% else %}
+
+            <div class="sidebar-header">Navigation</div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Main</div>
+                <ul class="sidebar-menu">
+                    <li><a href="{{ url_for('dashboard_page') }}" class="sidebar-link">
+                        <span class="sidebar-icon"><span class="icon icon-md icon-dashboard"></span></span>
+                        <span>Dashboard</span>
+                    </a></li>
+                </ul>
+            </div>
+
+            {% endif %}
+        </aside>
+        {% endif %}{# end sidebar hide on dashboard #}
+        
+        <!-- Content Area -->
+        <div class="content">
+            {% if request.path != url_for('console') and request.path != url_for('login') %}
+            <div class="page-header">
+                <div class="page-header-top">
+                    <div>
+                        <h1 class="page-title">{% block page_title %}Page{% endblock %}</h1>
+                        {% block page_subtitle %}<p class="page-subtitle"></p>{% endblock %}
+                    </div>
+                    <div class="page-actions">
+                        {% block page_actions %}{% endblock %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="page-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'error' else 'info' }}">
+                                {{ message }}
+                                {% if category == 'success' %}<span class="icon icon-sm icon-check" style="margin-left: 8px;"></span>{% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

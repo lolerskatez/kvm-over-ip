@@ -1,0 +1,114 @@
+#!/sbin/openrc-service
+# OpenRC service file for KVM-over-IP
+# Supports both Flask development (PRODUCTION=0) and Gunicorn production (PRODUCTION=1)
+
+description="KVM-over-IP Remote Console Service"
+
+# Configuration
+PRODUCTION=${PRODUCTION:-0}  # Set to 1 to use Gunicorn
+VENV_PATH="/opt/kvm-over-ip/.venv"
+APP_PATH="/opt/kvm-over-ip"
+PIDFILE="/var/run/kvm-over-ip.pid"
+LOGDIR="/var/log/kvm-over-ip"
+USER="kvm"
+GROUP="kvm"
+
+# IMPORTANT: Set SECRET_KEY environment variable for production deployments.
+# This ensures sessions persist across application restarts.
+# If not set, a random key is generated and persisted to disk.
+# Example: export SECRET_KEY="your-long-random-secret-key-here"
+# To generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+export SECRET_KEY="${SECRET_KEY:-}"
+
+# Select command based on PRODUCTION mode
+if [ "$PRODUCTION" = "1" ]; then
+    # Gunicorn production mode
+    command="${VENV_PATH}/bin/gunicorn"
+    command_args="-c ${APP_PATH}/gunicorn_config.py app:app"
+else
+    # Flask development mode
+    command="${VENV_PATH}/bin/python"
+    command_args="${APP_PATH}/app.py"
+fi
+
+pidfile="${PIDFILE}"
+
+depend() {
+    need net
+    provide kvm-over-ip
+}
+
+start_pre() {
+    mkdir -p "${LOGDIR}"
+    chown "${USER}:${GROUP}" "${LOGDIR}"
+    chmod 700 "${LOGDIR}"
+    
+    # Ensure log file exists and has correct permissions
+    touch "${LOGDIR}/app.log"
+    chown "${USER}:${GROUP}" "${LOGDIR}/app.log"
+    chmod 600 "${LOGDIR}/app.log"
+}
+
+start() {
+    ebegin "Starting KVM-over-IP" $([ "$PRODUCTION" = "1" ] && echo "(Gunicorn)" || echo "(Flask)")
+    
+    cd "${APP_PATH}" || { eend 1; return 1; }
+    
+    start-stop-daemon --start \
+        --pidfile "${pidfile}" \
+        --user "${USER}" \
+        --group "${GROUP}" \
+        --background \
+        --make-pidfile \
+        --chdir "${APP_PATH}" \
+        --exec ${command} \
+        -- ${command_args} \
+        >> "${LOGDIR}/app.log" 2>&1
+    
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping KVM-over-IP"
+    start-stop-daemon --stop \
+        --pidfile "${pidfile}" \
+        --exec ${command} \
+        --signal TERM \
+        --retry 30/TERM/5
+    eend $?
+}
+
+restart() {
+    ebegin "Restarting KVM-over-IP"
+    stop
+    sleep 1
+    start
+    eend $?
+}
+
+reload() {
+    ebegin "Reloading KVM-over-IP configuration"
+    if [ "$PRODUCTION" = "1" ]; then
+        # Gunicorn: graceful reload
+        start-stop-daemon --pidfile "${pidfile}" --signal HUP || eend 1
+    else
+        # Flask: restart required
+        restart
+        eend 0
+        return
+    fi
+    eend $?
+}
+
+status() {
+    if [ -f "${pidfile}" ]; then
+        local pid=$(cat "${pidfile}")
+        if kill -0 "$pid" 2>/dev/null; then
+            einfo "KVM-over-IP is running (PID: $pid)"
+            return 0
+        fi
+    fi
+    einfo "KVM-over-IP is not running"
+    return 1
+}
+

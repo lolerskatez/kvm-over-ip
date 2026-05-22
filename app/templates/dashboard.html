@@ -1,0 +1,697 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Dashboard — KVM-over-IP{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block page_subtitle %}
+<p class="page-subtitle">System overview and remote console access</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Top bar ── */
+  .dash-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg) var(--spacing-2xl);
+    margin-bottom: var(--spacing-2xl);
+    flex-wrap: wrap;
+  }
+
+  .dash-status-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+  }
+
+  .dash-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+  }
+
+  .dash-badge .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-online  { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+  .dot-offline { background: var(--color-danger); }
+  .dot-warn    { background: var(--color-warning); }
+
+  .btn-console {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: white;
+    font-weight: 700;
+    font-size: var(--text-base);
+    padding: var(--spacing-md) var(--spacing-2xl);
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    white-space: nowrap;
+    transition: filter var(--transition-base), box-shadow var(--transition-base);
+    box-shadow: 0 4px 14px rgba(0, 102, 204, 0.3);
+  }
+
+  .btn-console:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 6px 20px rgba(0, 102, 204, 0.45);
+  }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+    margin: 0 0 var(--spacing-md) 0;
+  }
+
+  /* ── Metric cards ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .metric-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  }
+
+  .metric-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 4px 16px rgba(0, 102, 204, 0.08);
+  }
+
+  .metric-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .metric-label {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+  }
+
+  .metric-icon {
+    color: var(--color-text-tertiary);
+  }
+
+  .metric-value {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .metric-sub {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-top: var(--spacing-sm);
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.6s ease, background-color 0.4s ease;
+  }
+
+  .progress-fill.ok   { background: var(--color-success); }
+  .progress-fill.warn { background: var(--color-warning); }
+  .progress-fill.crit { background: var(--color-danger); }
+
+  /* ── Lower grid ── */
+  .lower-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .info-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+    gap: var(--spacing-sm);
+  }
+
+  .info-row:last-child { border-bottom: none; }
+
+  .info-key {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .info-val {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    text-align: right;
+  }
+
+  /* ── Network table ── */
+  .net-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .net-table th {
+    text-align: left;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 2px solid var(--color-border);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-tertiary);
+  }
+
+  .net-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .net-table tbody tr:last-child td { border-bottom: none; }
+
+  .net-table tbody tr:hover td {
+    background: var(--color-bg-secondary);
+  }
+
+  .iface-name {
+    font-weight: 600;
+    font-family: monospace;
+  }
+
+  .rate-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-family: monospace;
+  }
+
+  /* ── Temp items ── */
+  .temp-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+
+  .temp-item:last-child { border-bottom: none; }
+
+  .temp-val            { font-weight: 700; font-family: monospace; }
+  .temp-val.hot        { color: var(--color-danger); }
+  .temp-val.warm       { color: var(--color-warning); }
+  .temp-val.ok         { color: var(--color-success); }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 768px) {
+    .metrics-grid { grid-template-columns: 1fr; }
+    .lower-grid   { grid-template-columns: 1fr; }
+    .dash-topbar  { flex-direction: column; align-items: flex-start; }
+    .btn-console  { width: 100%; justify-content: center; }
+  }
+  /* ── Bandwidth chart ── */
+  .bw-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .bw-meta {
+    display: flex;
+    gap: var(--spacing-2xl);
+    margin-bottom: var(--spacing-sm);
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+
+  .bw-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .bw-val {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+  }
+
+  .bw-lbl {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-tertiary);
+  }
+
+  #bwCanvas {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius-md);
+    height: 72px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Top Bar -->
+<div class="dash-topbar">
+  <div class="dash-status-badges">
+    <div class="dash-badge">
+      <span class="dot dot-offline" id="hidDot"></span>
+      <span>HID</span>
+    </div>
+    <div class="dash-badge">
+      <span class="dot dot-offline" id="vidDot"></span>
+      <span>Video</span>
+    </div>
+    <div class="dash-badge">
+      <span class="dot dot-online"></span>
+      <span id="uptimeBadge">Uptime —</span>
+    </div>
+    <div class="dash-badge">
+      <span class="dot dot-online"></span>
+      <span id="tempBadge">CPU —</span>
+    </div>
+  </div>
+  <a href="{{ url_for('console') }}" class="btn-console">
+    <span class="icon icon-md icon-monitor"></span>
+    Launch Console
+  </a>
+</div>
+
+<!-- Metrics Row -->
+<p class="section-title">System Performance</p>
+<div class="metrics-grid">
+
+  <div class="metric-card">
+    <div class="metric-header">
+      <span class="metric-label">CPU</span>
+      <span class="metric-icon"><span class="icon icon-sm icon-cpu"></span></span>
+    </div>
+    <div class="metric-value" id="cpuPercent">—</div>
+    <div class="metric-sub" id="cpuCores">— cores</div>
+    <div class="progress-bar">
+      <div class="progress-fill ok" id="cpuBar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-header">
+      <span class="metric-label">Memory</span>
+      <span class="metric-icon"><span class="icon icon-sm icon-memory"></span></span>
+    </div>
+    <div class="metric-value" id="memPercent">—</div>
+    <div class="metric-sub" id="memDetail">— / — MB</div>
+    <div class="progress-bar">
+      <div class="progress-fill ok" id="memBar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-header">
+      <span class="metric-label">Disk</span>
+      <span class="metric-icon"><span class="icon icon-sm icon-hard-drive"></span></span>
+    </div>
+    <div class="metric-value" id="diskPercent">—</div>
+    <div class="metric-sub" id="diskDetail">— / — GB</div>
+    <div class="progress-bar">
+      <div class="progress-fill ok" id="diskBar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="metric-card">
+    <div class="metric-header">
+      <span class="metric-label">Load Average</span>
+      <span class="metric-icon"><span class="icon icon-sm icon-trending-up"></span></span>
+    </div>
+    <div class="metric-value" id="load1">—</div>
+    <div class="metric-sub" id="loadDetail">5m — · 15m —</div>
+  </div>
+
+</div>
+
+<!-- Lower Grid -->
+<div class="lower-grid">
+
+  <!-- Left column: System info + Temperatures -->
+  <div style="display:flex;flex-direction:column;gap:var(--spacing-lg)">
+    <div class="info-card">
+      <p class="section-title">System</p>
+      <div class="info-row">
+        <span class="info-key">Uptime</span>
+        <span class="info-val" id="uptimeDetail">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">CPU cores</span>
+        <span class="info-val" id="coreCount">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">Load 1m / 5m / 15m</span>
+        <span class="info-val" id="loadFull">—</span>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <p class="section-title">Temperatures</p>
+      <div id="tempList">
+        <div class="temp-item">
+          <span style="color:var(--color-text-tertiary)">No sensors found</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column: Network -->
+  <div class="info-card">
+    <p class="section-title">Network Interfaces</p>
+    <div style="overflow-x:auto">
+      <table class="net-table">
+        <thead>
+          <tr>
+            <th>Interface</th>
+            <th>RX total</th>
+            <th>TX total</th>
+            <th>RX rate</th>
+            <th>TX rate</th>
+          </tr>
+        </thead>
+        <tbody id="netBody">
+          <tr>
+            <td colspan="5" style="text-align:center;color:var(--color-text-tertiary)">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Video / Bandwidth Chart -->
+<p class="section-title">Video Stream</p>
+<div class="bw-card">
+  <div class="bw-meta">
+    <div class="bw-stat">
+      <span class="bw-val" id="bwVal">—</span>
+      <span class="bw-lbl">Bandwidth</span>
+    </div>
+    <div class="bw-stat">
+      <span class="bw-val" id="bwFps">—</span>
+      <span class="bw-lbl">FPS</span>
+    </div>
+    <div class="bw-stat">
+      <span class="bw-val" id="bwRes">—</span>
+      <span class="bw-lbl">Resolution</span>
+    </div>
+    <div class="bw-stat">
+      <span class="bw-val" id="bwFrames">—</span>
+      <span class="bw-lbl">Total Frames</span>
+    </div>
+  </div>
+  <canvas id="bwCanvas"></canvas>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function barClass(pct) {
+  if (pct > 90) return 'crit';
+  if (pct > 70) return 'warn';
+  return 'ok';
+}
+
+function fmtBytes(b) {
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576)    return (b / 1048576).toFixed(1) + ' MB';
+  if (b >= 1024)       return (b / 1024).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+function fmtRate(bps) {
+  if (bps >= 1048576) return (bps / 1048576).toFixed(1) + ' MB/s';
+  if (bps >= 1024)    return (bps / 1024).toFixed(0) + ' KB/s';
+  return bps + ' B/s';
+}
+
+function setBar(id, pct) {
+  const el = document.getElementById(id);
+  el.style.width = pct + '%';
+  el.className = 'progress-fill ' + barClass(pct);
+}
+
+function tempClass(c) {
+  if (c >= 80) return 'hot';
+  if (c >= 60) return 'warm';
+  return 'ok';
+}
+
+function refreshStatus() {
+  fetch('/api/status', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('hidDot').className = 'dot ' + (d.hid_connected ? 'dot-online' : 'dot-offline');
+      document.getElementById('vidDot').className = 'dot ' + (d.video_running ? 'dot-online' : 'dot-offline');
+    })
+    .catch(() => {});
+}
+
+function refreshStats() {
+  fetch('/api/system/stats', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => {
+      // CPU
+      const cpuPct = d.cpu.percent;
+      document.getElementById('cpuPercent').textContent = cpuPct + '%';
+      document.getElementById('cpuCores').textContent =
+        d.cpu.cores + ' cores · ' + (d.cpu.count || d.cpu.cores) + ' threads';
+      setBar('cpuBar', cpuPct);
+
+      // Memory
+      const memPct = d.memory.percent;
+      document.getElementById('memPercent').textContent = memPct + '%';
+      document.getElementById('memDetail').textContent =
+        d.memory.used_mb.toFixed(0) + ' / ' + d.memory.total_mb.toFixed(0) + ' MB';
+      setBar('memBar', memPct);
+
+      // Disk
+      const diskPct = d.disk.percent;
+      document.getElementById('diskPercent').textContent = diskPct + '%';
+      document.getElementById('diskDetail').textContent =
+        d.disk.used_gb + ' / ' + d.disk.total_gb + ' GB';
+      setBar('diskBar', diskPct);
+
+      // Load
+      document.getElementById('load1').textContent = d.load.load_1.toFixed(2);
+      document.getElementById('loadDetail').textContent =
+        '5m ' + d.load.load_5.toFixed(2) + ' · 15m ' + d.load.load_15.toFixed(2);
+      document.getElementById('loadFull').textContent =
+        d.load.load_1.toFixed(2) + ' / ' + d.load.load_5.toFixed(2) + ' / ' + d.load.load_15.toFixed(2);
+
+      // Uptime
+      document.getElementById('uptimeDetail').textContent = d.uptime.human;
+      document.getElementById('uptimeBadge').textContent =
+        'Up ' + (d.uptime.human.split(',')[0] || d.uptime.human);
+      document.getElementById('coreCount').textContent = d.cpu.cores;
+
+      // Temperature
+      const temps = d.temperature || [];
+      if (temps.length > 0) {
+        document.getElementById('tempBadge').textContent = 'CPU ' + temps[0].temp_c + '°C';
+        document.getElementById('tempList').innerHTML = temps.map(t =>
+          '<div class="temp-item">' +
+          '<span style="color:var(--color-text-secondary)">' + t.zone + '</span>' +
+          '<span class="temp-val ' + tempClass(t.temp_c) + '">' + t.temp_c + '°C</span>' +
+          '</div>'
+        ).join('');
+      } else {
+        document.getElementById('tempBadge').textContent = 'CPU —';
+        document.getElementById('tempList').innerHTML =
+          '<div class="temp-item"><span style="color:var(--color-text-tertiary)">No sensors found</span></div>';
+      }
+
+      // Network
+      const ifaces = Object.keys(d.network);
+      const netBody = document.getElementById('netBody');
+      if (ifaces.length === 0) {
+        netBody.innerHTML =
+          '<tr><td colspan="5" style="text-align:center;color:var(--color-text-tertiary)">No interfaces detected</td></tr>';
+      } else {
+        netBody.innerHTML = ifaces.map(iface => {
+          const n = d.network[iface];
+          return '<tr>' +
+            '<td><span class="iface-name">' + iface + '</span></td>' +
+            '<td>' + fmtBytes(n.rx_bytes) + '</td>' +
+            '<td>' + fmtBytes(n.tx_bytes) + '</td>' +
+            '<td><span class="rate-badge">' + fmtRate(n.rx_rate_bps) + '</span></td>' +
+            '<td><span class="rate-badge">' + fmtRate(n.tx_rate_bps) + '</span></td>' +
+            '</tr>';
+        }).join('');
+      }
+    })
+    .catch(err => console.error('Dashboard stats error:', err));
+}
+
+refreshStatus();
+refreshStats();
+setInterval(refreshStatus, 5000);
+setInterval(refreshStats, 3000);
+
+/* ── Bandwidth sparkline chart ── */
+const BW_MAX_POINTS = 60;
+let bwHistory = [];   // [{bps, fps}]
+let _bwCanvas = null, _bwCtx = null;
+
+function bwInitCanvas() {
+  _bwCanvas = document.getElementById('bwCanvas');
+  if (!_bwCanvas) return;
+  _bwCanvas.width  = _bwCanvas.offsetWidth  || 800;
+  _bwCanvas.height = 72;
+  _bwCtx = _bwCanvas.getContext('2d');
+}
+
+function bwDrawChart() {
+  if (!_bwCtx || bwHistory.length < 2) return;
+  const W = _bwCanvas.width, H = _bwCanvas.height;
+  _bwCtx.clearRect(0, 0, W, H);
+
+  const bpsList = bwHistory.map(d => d.bps);
+  const maxBps  = Math.max(...bpsList, 1024);
+  const step    = W / (BW_MAX_POINTS - 1);
+
+  // Grid lines
+  _bwCtx.strokeStyle = 'rgba(127,127,127,0.15)';
+  _bwCtx.lineWidth   = 1;
+  for (const frac of [0.25, 0.5, 0.75]) {
+    const y = H - frac * H;
+    _bwCtx.beginPath(); _bwCtx.moveTo(0, y); _bwCtx.lineTo(W, y); _bwCtx.stroke();
+  }
+
+  // Filled area
+  _bwCtx.beginPath();
+  bwHistory.forEach((d, i) => {
+    // Pad missing history on the left with zeros
+    const xIdx = i + (BW_MAX_POINTS - bwHistory.length);
+    const x = xIdx * step;
+    const y = H - (d.bps / maxBps) * H;
+    i === 0 ? _bwCtx.moveTo(x, y) : _bwCtx.lineTo(x, y);
+  });
+  const lastX = (BW_MAX_POINTS - 1) * step;
+  const firstX = (BW_MAX_POINTS - bwHistory.length) * step;
+  _bwCtx.lineTo(lastX, H);
+  _bwCtx.lineTo(firstX, H);
+  _bwCtx.closePath();
+  const grad = _bwCtx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0,102,204,0.45)');
+  grad.addColorStop(1, 'rgba(0,102,204,0.04)');
+  _bwCtx.fillStyle = grad;
+  _bwCtx.fill();
+
+  // Line
+  _bwCtx.beginPath();
+  bwHistory.forEach((d, i) => {
+    const xIdx = i + (BW_MAX_POINTS - bwHistory.length);
+    const x = xIdx * step;
+    const y = H - (d.bps / maxBps) * H;
+    i === 0 ? _bwCtx.moveTo(x, y) : _bwCtx.lineTo(x, y);
+  });
+  _bwCtx.strokeStyle = '#0066cc';
+  _bwCtx.lineWidth   = 2;
+  _bwCtx.stroke();
+}
+
+function fmtBwLabel(bps) {
+  if (bps >= 1048576) return (bps / 1048576).toFixed(2) + ' MB/s';
+  if (bps >= 1024)    return (bps / 1024).toFixed(0) + ' KB/s';
+  return bps + ' B/s';
+}
+
+function pollVideoStats() {
+  fetch('/api/video/stats', { credentials: 'include' })
+    .then(r => r.json())
+    .then(d => {
+      const bps = d.bandwidth_bps || 0;
+      const fps = d.fps || 0;
+      bwHistory.push({ bps, fps });
+      if (bwHistory.length > BW_MAX_POINTS) bwHistory.shift();
+      document.getElementById('bwVal').textContent  = fmtBwLabel(bps);
+      document.getElementById('bwFps').textContent  = fps;
+      document.getElementById('bwRes').textContent  = d.resolution || '—';
+      document.getElementById('bwFrames').textContent = (d.frame_count || 0).toLocaleString();
+      bwDrawChart();
+    })
+    .catch(() => {});
+}
+
+bwInitCanvas();
+pollVideoStats();
+setInterval(pollVideoStats, 1000);
+window.addEventListener('resize', () => {
+  if (_bwCanvas) { _bwCanvas.width = _bwCanvas.offsetWidth || 800; bwDrawChart(); }
+});
+</script>
+{% endblock %}

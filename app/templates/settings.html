@@ -1,0 +1,1377 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings — KVM-over-IP{% endblock %}
+
+{% block page_title %}System Settings{% endblock %}
+
+{% block page_subtitle %}
+<p class="page-subtitle">Configure hardware, security, and system preferences</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .section {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .section h2 {
+    margin-top: 0;
+    color: var(--color-primary);
+    font-size: var(--text-xl);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .section h3 {
+    color: var(--color-text-primary);
+    font-size: var(--text-lg);
+    margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .form-group {
+    margin-bottom: var(--spacing-md);
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    color: var(--color-text-primary);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: var(--spacing-sm);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--text-sm);
+    font-family: inherit;
+  }
+
+  .form-group textarea {
+    font-family: monospace;
+    resize: vertical;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+  }
+
+  button {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    transition: var(--transition-base);
+  }
+
+  button:hover {
+    filter: brightness(0.9);
+  }
+
+  button:active {
+    filter: brightness(0.85);
+  }
+
+  .btn-secondary {
+    background: var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: white;
+  }
+
+  .btn-danger:hover {
+    filter: brightness(0.9);
+  }
+
+  .btn-warn {
+    background: var(--color-warning);
+    color: white;
+  }
+
+  .btn-warn:hover {
+    filter: brightness(0.9);
+  }
+
+  .message {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--text-sm);
+    display: none;
+  }
+
+  .message.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success);
+    border-left: 4px solid var(--color-success);
+  }
+
+  .message.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-danger);
+    border-left: 4px solid var(--color-danger);
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .status-row:last-child {
+    border-bottom: none;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .status-dot.online {
+    background: var(--color-success);
+  }
+
+  .status-dot.offline {
+    background: var(--color-danger);
+  }
+
+  .status-label {
+    flex: 1;
+    font-size: var(--text-sm);
+  }
+
+  .reconnect-btns {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+  }
+
+  .reconect-btns button {
+    flex: 1;
+  }
+
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+    margin-top: var(--spacing-md);
+  }
+
+  .audit-table th {
+    background: var(--color-bg-primary);
+    padding: var(--spacing-sm);
+    text-align: left;
+    color: var(--color-primary);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+  }
+
+  .audit-table td {
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .audit-success {
+    color: var(--color-success);
+  }
+
+  .audit-fail {
+    color: var(--color-danger);
+  }
+
+  .twofa-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--text-sm);
+  }
+
+  .twofa-badge-on {
+    background: var(--color-success);
+    color: white;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: var(--text-xs);
+  }
+
+  .twofa-badge-off {
+    background: var(--color-border);
+    color: var(--color-text-secondary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: var(--text-xs);
+  }
+
+  .qr-container {
+    text-align: center;
+    margin: var(--spacing-lg) 0;
+  }
+
+  .qr-container img {
+    max-width: 250px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .backup-codes {
+    background: var(--color-bg-primary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    font-size: var(--text-sm);
+    columns: 2;
+    column-gap: var(--spacing-lg);
+    color: var(--color-text-secondary);
+  }
+
+  .backup-codes div {
+    padding: var(--spacing-xs) 0;
+  }
+
+  .secret-text {
+    background: var(--color-bg-primary);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    font-family: monospace;
+    font-size: var(--text-xs);
+    word-break: break-all;
+    margin: var(--spacing-md) 0;
+    color: var(--color-text-secondary);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-top: var(--spacing-md);
+  }
+
+  .btn-row button,
+  .btn-row .btn {
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .sub-form {
+    margin-top: var(--spacing-md);
+  }
+
+  .sub-heading {
+    color: var(--color-text-primary);
+    font-size: var(--text-base);
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .mt-8 {
+    margin-top: var(--spacing-sm);
+  }
+
+  .hint {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-sm);
+    font-style: italic;
+  }
+
+  .table-empty {
+    text-align: center;
+    color: var(--color-text-tertiary);
+  }
+
+  /* Panel switching */
+  .settings-panel {
+    display: none;
+  }
+  .settings-panel.active {
+    display: block;
+  }
+
+  @media (max-width: 768px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+
+    .reconnect-btns,
+    .btn-row {
+      flex-direction: column;
+    }
+
+    .reconnect-btns button,
+    .btn-row button {
+      width: 100%;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="message" class="message"></div>
+
+<!-- Device Panel -->
+<div class="settings-panel" id="panel-device">
+  <div class="section">
+    <h2>Device Status</h2>
+    <div id="deviceStatus">
+      <div class="status-row">
+        <span class="status-dot offline" id="hidDot"></span>
+        <span class="status-label">HID Controller</span>
+      </div>
+      <div class="status-row">
+        <span class="status-dot offline" id="vidDot"></span>
+        <span class="status-label">Video Streamer</span>
+      </div>
+    </div>
+    <div class="reconnect-btns">
+      <button class="btn-warn" onclick="reconnect('hid')">Reconnect HID</button>
+      <button class="btn-warn" onclick="reconnect('video')">Reconnect Video</button>
+      <button class="btn-warn" onclick="reconnect('both')">Reconnect Both</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Hardware Configuration</h2>
+    <form id="configForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="videoDevice">Video Device</label>
+          <input type="text" id="videoDevice" placeholder="/dev/video0">
+        </div>
+        <div class="form-group">
+          <label for="hidDevice">HID Device</label>
+          <input type="text" id="hidDevice" placeholder="/dev/ttyUSB0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="resolution">Resolution</label>
+          <select id="resolution">
+            <option value="640x480">640x480</option>
+            <option value="800x600">800x600</option>
+            <option value="1024x768">1024x768</option>
+            <option value="1280x720">1280x720</option>
+            <option value="1920x1080">1920x1080</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="framerate">Framerate (FPS)</label>
+          <input type="number" id="framerate" min="1" max="60" value="15">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="bitrate">Bitrate</label>
+        <select id="bitrate">
+          <option value="500k">500k (Low)</option>
+          <option value="1000k">1000k</option>
+          <option value="1500k">1500k</option>
+          <option value="2000k">2000k (Default)</option>
+          <option value="3000k">3000k</option>
+          <option value="5000k">5000k (High)</option>
+        </select>
+      </div>
+      <button type="submit">Save Configuration</button>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>EDID Emulation</h2>
+    <div id="edidStatus">
+      <p>Loading EDID status...</p>
+    </div>
+    <div class="form-group">
+      <label for="edidPreset">Apply Preset EDID</label>
+      <select id="edidPreset">
+        <option value="">— Select —</option>
+      </select>
+    </div>
+    <div class="btn-row">
+      <button onclick="applyEdidPreset()">Apply Preset</button>
+      <button class="btn-secondary" onclick="document.getElementById('edidUploadInput').click()">Upload EDID File</button>
+      <button class="btn-danger" onclick="clearEdid()">Clear EDID</button>
+    </div>
+    <input type="file" id="edidUploadInput" hidden accept=".bin,.edid" onchange="uploadEdid(this)">
+  </div>
+</div><!-- end panel-device -->
+
+<!-- Security Panel -->
+<div class="settings-panel" id="panel-security">
+  <div class="section">
+    <h2>Two-Factor Authentication</h2>
+    <div class="twofa-status">
+      <span>Status:</span>
+      <span id="twofaBadge" class="twofa-badge-off">OFF</span>
+    </div>
+    <div id="twofaSetup">
+      <button onclick="setup2FA()">Enable 2FA</button>
+    </div>
+    <div id="twofaQR" hidden>
+      <div class="qr-container">
+        <img id="qrImage" src="" alt="QR Code">
+      </div>
+      <p>Scan this QR code with your authenticator app, then enter the 6-digit code below to confirm:</p>
+      <div class="secret-text" id="secretText"></div>
+      <div class="form-group">
+        <input type="text" id="confirmToken" placeholder="Enter 6-digit code" maxlength="6">
+      </div>
+      <button onclick="confirm2FA()">Confirm &amp; Enable</button>
+    </div>
+    <div id="twofaDisable" hidden>
+      <div class="form-group">
+        <label for="disablePassword">Enter your password to disable 2FA</label>
+        <input type="password" id="disablePassword" placeholder="Your password">
+      </div>
+      <button class="btn-danger" onclick="disable2FA()">Disable 2FA</button>
+    </div>
+    <div id="backupCodes" hidden>
+      <h3>Backup Codes</h3>
+      <p>Save these codes somewhere safe. Each code can only be used once.</p>
+      <div class="backup-codes" id="backupCodesList"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>SSL/TLS Certificate</h2>
+    <div id="certInfo">
+      <p>Loading certificate status...</p>
+    </div>
+    <div class="btn-row">
+      <button onclick="generateSelfSigned()">Generate Self-Signed</button>
+      <button class="btn-secondary" onclick="document.getElementById('certUploadForm').hidden = !document.getElementById('certUploadForm').hidden">Upload Certificate</button>
+      <button class="btn-secondary" onclick="document.getElementById('letsEncryptForm').hidden = !document.getElementById('letsEncryptForm').hidden">Let's Encrypt</button>
+      <button class="btn-danger" onclick="deleteCert()">Delete Certificate</button>
+    </div>
+    <div id="certUploadForm" hidden class="form-group sub-form">
+      <label>Certificate File (.pem)</label>
+      <input type="file" id="certFile" accept=".pem,.crt">
+      <label class="mt-8">Key File (.pem)</label>
+      <input type="file" id="keyFile" accept=".pem,.key">
+      <button class="mt-8" onclick="uploadCert()">Upload</button>
+    </div>
+    <div id="letsEncryptForm" hidden class="form-group sub-form">
+      <label for="leDomain">Domain</label>
+      <input type="text" id="leDomain" placeholder="kvm.example.com">
+      <label for="leEmail" class="mt-8">Email (optional)</label>
+      <input type="email" id="leEmail" placeholder="admin@example.com">
+      <button class="mt-8" onclick="requestLetsEncrypt()">Request Certificate</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>IP Access Control</h2>
+    <div class="form-group">
+      <label><input type="checkbox" id="aclEnabled"> Enable IP Access Control</label>
+    </div>
+    <div class="form-group">
+      <label for="aclMode">Mode</label>
+      <select id="aclMode">
+        <option value="whitelist">Whitelist (only allow listed IPs)</option>
+        <option value="blacklist">Blacklist (block listed IPs)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="aclWhitelist">Whitelist (one IP or CIDR per line)</label>
+      <textarea id="aclWhitelist" rows="4" class="form-textarea" placeholder="192.168.1.0/24&#10;10.0.0.5"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="aclBlacklist">Blacklist (one IP or CIDR per line)</label>
+      <textarea id="aclBlacklist" rows="4" class="form-textarea" placeholder="203.0.113.0/24"></textarea>
+    </div>
+    <button onclick="saveIpAcl()">Save IP ACL</button>
+    <p class="hint">Warning: Misconfigured whitelist can lock you out. Ensure your current IP is included.</p>
+  </div>
+</div><!-- end panel-security -->
+
+<!-- Session Panel -->
+<div class="settings-panel" id="panel-session">
+  <div class="section">
+    <h2>Inactivity Auto-Logout</h2>
+    <div class="form-group">
+      <label for="idleTimeout">Idle Timeout (seconds, 0 = disabled)</label>
+      <input type="number" id="idleTimeout" min="0" max="86400" value="900">
+    </div>
+    <button onclick="saveIdleTimeout()">Save Timeout</button>
+  </div>
+
+  <div class="section">
+    <h2>Session Recordings</h2>
+    <div id="recordingsList">
+      <p>Loading recordings...</p>
+    </div>
+  </div>
+</div><!-- end panel-session -->
+
+<!-- Notifications Panel -->
+<div class="settings-panel" id="panel-notifications">
+  <div class="section">
+    <h2>Email / Webhook Notifications</h2>
+    <h3 class="sub-heading">Email (SMTP)</h3>
+    <div class="form-group">
+      <label><input type="checkbox" id="notifEmailEnabled"> Enable Email Notifications</label>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="smtpHost">SMTP Host</label>
+        <input type="text" id="smtpHost" placeholder="smtp.example.com">
+      </div>
+      <div class="form-group">
+        <label for="smtpPort">SMTP Port</label>
+        <input type="number" id="smtpPort" value="587" min="1" max="65535">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="smtpUser">SMTP Username</label>
+        <input type="text" id="smtpUser" placeholder="user@example.com">
+      </div>
+      <div class="form-group">
+        <label for="smtpPass">SMTP Password</label>
+        <input type="password" id="smtpPass" placeholder="password">
+      </div>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="smtpTls" checked> Use TLS</label>
+    </div>
+    <div class="form-group">
+      <label for="smtpFrom">From Address</label>
+      <input type="email" id="smtpFrom" placeholder="kvm@example.com">
+    </div>
+    <div class="form-group">
+      <label for="smtpTo">Recipients (comma-separated)</label>
+      <input type="text" id="smtpTo" placeholder="admin@example.com, ops@example.com">
+    </div>
+    <div class="btn-row">
+      <button onclick="saveNotifications()">Save Email Settings</button>
+      <button class="btn-secondary" onclick="testEmail()">Send Test Email</button>
+    </div>
+
+    <h3 class="sub-heading" style="margin-top:20px">Webhook</h3>
+    <div class="form-group">
+      <label><input type="checkbox" id="notifWebhookEnabled"> Enable Webhook Notifications</label>
+    </div>
+    <div class="form-group">
+      <label for="webhookUrl">Webhook URL</label>
+      <input type="url" id="webhookUrl" placeholder="https://hooks.slack.com/services/...">
+    </div>
+    <div class="btn-row">
+      <button onclick="saveNotifications()">Save Webhook Settings</button>
+      <button class="btn-secondary" onclick="testWebhook()">Send Test Webhook</button>
+    </div>
+
+    <h3 class="sub-heading" style="margin-top:20px">Notification Events</h3>
+    <div class="form-group">
+      <label><input type="checkbox" id="evtFailedLogin" checked> Failed Login Attempts</label>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="evtSessionTakeover" checked> Session Takeover</label>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="evtDeviceDisconnect" checked> Device Disconnect</label>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="evtTempAlert"> Temperature Alert</label>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="evtRecordingStarted"> Recording Started</label>
+    </div>
+    <div class="form-group">
+      <label for="tempThreshold">Temperature Threshold (°C)</label>
+      <input type="number" id="tempThreshold" value="80" min="40" max="120">
+    </div>
+    <button onclick="saveNotifications()">Save All Notification Settings</button>
+  </div>
+</div><!-- end panel-notifications -->
+
+<!-- Network Panel -->
+<div class="settings-panel" id="panel-network">
+  <div class="section">
+    <h2>Remote Syslog</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="syslogHost">Syslog Host</label>
+        <input type="text" id="syslogHost" placeholder="syslog.example.com">
+      </div>
+      <div class="form-group">
+        <label for="syslogPort">Syslog Port</label>
+        <input type="number" id="syslogPort" min="1" max="65535" value="514">
+      </div>
+    </div>
+    <button onclick="saveSyslog()">Save Syslog Config</button>
+  </div>
+</div><!-- end panel-network -->
+
+<!-- SSO Panel -->
+<div class="settings-panel" id="panel-sso">
+  <div class="section">
+    <h2>Single Sign-On (OIDC)</h2>
+    <div id="oidcAvailability" style="margin-bottom:var(--spacing-sm)"></div>
+
+    <div class="form-group">
+      <label><input type="checkbox" id="oidcEnabled"> Enable OIDC / SSO Authentication</label>
+      <p class="help-text">When enabled, a "Sign in with SSO" button appears on the login page. Users authenticate through your identity provider (Authentik, Keycloak, Google, GitHub, etc.). Local accounts always remain available as a fallback.</p>
+    </div>
+
+    <!-- Quick-fill presets -->
+    <div class="form-group">
+      <span style="font-size:var(--text-xs);color:var(--color-text-secondary);margin-right:var(--spacing-sm)">Quick fill:</span>
+      <button class="btn-secondary" style="font-size:var(--text-xs);padding:2px 10px" onclick="oidcPreset('authentik')">Authentik</button>
+      <button class="btn-secondary" style="font-size:var(--text-xs);padding:2px 10px;margin-left:6px" onclick="oidcPreset('keycloak')">Keycloak</button>
+      <button class="btn-secondary" style="font-size:var(--text-xs);padding:2px 10px;margin-left:6px" onclick="oidcPreset('google')">Google</button>
+      <button class="btn-secondary" style="font-size:var(--text-xs);padding:2px 10px;margin-left:6px" onclick="oidcPreset('github')">GitHub</button>
+    </div>
+
+    <div class="form-group">
+      <label for="oidcIssuerUrl">Issuer URL</label>
+      <input type="url" id="oidcIssuerUrl" placeholder="https://sso.example.com/application/o/kvm/">
+      <p class="help-text">Base URL of your identity provider. The app will fetch <code>/.well-known/openid-configuration</code> from this URL automatically.</p>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="oidcClientId">Client ID</label>
+        <input type="text" id="oidcClientId" placeholder="kvm-over-ip" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="oidcClientSecret">Client Secret</label>
+        <input type="password" id="oidcClientSecret" placeholder="Leave blank to keep saved secret" autocomplete="new-password">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="oidcScope">Scopes</label>
+      <input type="text" id="oidcScope" placeholder="openid email profile">
+      <p class="help-text">Space-separated list of OAuth2 scopes to request. <code>openid email profile</code> works for most providers.</p>
+    </div>
+    <div class="form-group">
+      <label for="oidcUsernameClaim">Username Claim</label>
+      <input type="text" id="oidcUsernameClaim" placeholder="preferred_username">
+      <p class="help-text">The ID token / userinfo claim to use as the local username. Defaults to <code>preferred_username</code>. Use <code>email</code> for Google/GitHub.</p>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="oidcAdminClaim">Group Claim Name</label>
+        <input type="text" id="oidcAdminClaim" placeholder="groups">
+        <p class="help-text">The claim that carries group membership (e.g. <code>groups</code>). Used for both access control and admin detection.</p>
+      </div>
+      <div class="form-group">
+        <label for="oidcAdminClaimValue">Admin Group Value</label>
+        <input type="text" id="oidcAdminClaimValue" placeholder="kvm-admins">
+        <p class="help-text">Group value that grants admin rights.</p>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="oidcAllowedGroups">Allowed Groups <span style="font-weight:normal;color:var(--color-text-tertiary)">(comma-separated)</span></label>
+      <input type="text" id="oidcAllowedGroups" placeholder="kvm-users, kvm-admins">
+      <p class="help-text">Group values that may log in via SSO. Admins are always allowed regardless. If left blank, <strong>only admins</strong> can log in via SSO.</p>
+    </div>
+    <div class="btn-row">
+      <button onclick="saveOidc()">Save OIDC Config</button>
+      <button class="btn-secondary" onclick="testOidc()">Test Discovery</button>
+    </div>
+    <div id="oidcTestResult" style="margin-top:var(--spacing-sm);display:none"></div>
+
+    <div style="margin-top:var(--spacing-lg);padding:var(--spacing-md);background:var(--color-bg-secondary);border-radius:var(--radius-md);font-size:var(--text-xs);color:var(--color-text-secondary)">
+      <strong>Callback URL</strong> — register this as the redirect URI in your identity provider:<br>
+      <code id="oidcCallbackUrl" style="word-break:break-all"></code>
+    </div>
+  </div>
+</div><!-- end panel-sso -->
+
+<!-- System Panel -->
+<div class="settings-panel" id="panel-system">
+  <div class="section">
+    <h2>Software Update</h2>
+    <div id="updateStatus">
+      <p>Click Check to look for updates.</p>
+    </div>
+    <div class="btn-row">
+      <button onclick="checkUpdate()">Check for Updates</button>
+      <button class="btn-warn" id="applyUpdateBtn" onclick="applyUpdate()" hidden>Apply Update</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Configuration Backup &amp; Restore</h2>
+    <div id="backupFilesList"></div>
+    <div class="form-group">
+      <label for="backupPassword">Backup Password (optional)</label>
+      <input type="password" id="backupPassword" placeholder="Leave empty for no encryption">
+    </div>
+    <div class="btn-row">
+      <button onclick="exportBackup()">Export Backup</button>
+      <button class="btn-secondary" onclick="document.getElementById('restoreFileInput').click()">Import Backup</button>
+    </div>
+    <input type="file" id="restoreFileInput" hidden accept=".zip" onchange="importBackup(this)">
+    <div class="form-group" id="restorePasswordGroup" hidden>
+      <label for="restorePassword">Backup Password</label>
+      <input type="password" id="restorePassword" placeholder="Enter backup password">
+      <button class="mt-8" onclick="submitRestore()">Restore</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Audit Log (Last 72 Hours)</h2>
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Time</th>
+          <th>IP Address</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="auditLog">
+        <tr><td colspan="4" class="table-empty">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div><!-- end panel-system -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let csrfToken = '';
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+}
+
+function showMessage(text, type = 'success') {
+  const el = document.getElementById('message');
+  el.className = 'message ' + type;
+  el.textContent = text;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function loadStatus() {
+  fetch('/api/status', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      csrfToken = data.csrf_token || csrfToken;
+      document.getElementById('hidDot').className = 'status-dot ' + (data.hid_connected ? 'online' : 'offline');
+      document.getElementById('vidDot').className = 'status-dot ' + (data.video_running ? 'online' : 'offline');
+    })
+    .catch(err => console.error('Status error:', err));
+}
+
+function loadConfig() {
+  fetch('/api/config', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(config => {
+      document.getElementById('videoDevice').value = config.video_device || '';
+      document.getElementById('hidDevice').value = config.hid_device || '';
+      document.getElementById('resolution').value = config.resolution || '1280x720';
+      document.getElementById('framerate').value = config.framerate || 15;
+      document.getElementById('bitrate').value = config.bitrate || '2000k';
+    })
+    .catch(err => console.error('Config error:', err));
+}
+
+function load2FAStatus() {
+  fetch('/api/2fa/status', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const badge = document.getElementById('twofaBadge');
+      if (data.enabled) {
+        badge.className = 'twofa-badge-on';
+        badge.textContent = 'ON';
+        document.getElementById('twofaSetup').hidden = true;
+        document.getElementById('twofaDisable').hidden = false;
+      } else {
+        badge.className = 'twofa-badge-off';
+        badge.textContent = 'OFF';
+        document.getElementById('twofaSetup').hidden = false;
+        document.getElementById('twofaDisable').hidden = true;
+      }
+    })
+    .catch(err => console.error('2FA status error:', err));
+}
+
+function loadAuditLog() {
+  fetch('/api/audit-log', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const tbody = document.getElementById('auditLog');
+      tbody.innerHTML = '';
+      let entries = [];
+      for (const [username, attempts] of Object.entries(data.audit_log)) {
+        attempts.forEach(a => {
+          entries.push({ username, ...a });
+        });
+      }
+      entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      entries = entries.slice(0, 100);
+      
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#666;">No login attempts</td></tr>';
+        return;
+      }
+      
+      entries.forEach(e => {
+        const row = document.createElement('tr');
+        const time = new Date(e.timestamp).toLocaleString();
+        const cls = e.success ? 'audit-success' : 'audit-fail';
+        const result = e.success ? 'Success' : 'Failed';
+        row.innerHTML = '<td>' + e.username + '</td><td>' + time + '</td><td>' + (e.ip_address || 'N/A') + '</td><td class="' + cls + '">' + result + '</td>';
+        tbody.appendChild(row);
+      });
+    })
+    .catch(err => console.error('Audit log error:', err));
+}
+
+function reconnect(target) {
+  const data = {};
+  if (target === 'hid' || target === 'both') data.hid = true;
+  if (target === 'video' || target === 'both') data.video = true;
+  
+  fetch('/api/reconnect', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify(data)
+  })
+    .then(r => r.json())
+    .then(result => {
+      showMessage('Reconnection initiated');
+      setTimeout(loadStatus, 1000);
+    })
+    .catch(err => {
+      showMessage('Reconnection failed', 'error');
+    });
+}
+
+function setup2FA() {
+  fetch('/api/2fa/setup', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({})
+  })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('qrImage').src = data.qr_code;
+      document.getElementById('secretText').textContent = 'Secret: ' + data.secret;
+      document.getElementById('twofaQR').hidden = false;
+      document.getElementById('twofaSetup').hidden = true;
+    })
+    .catch(err => {
+      showMessage('Failed to start 2FA setup', 'error');
+    });
+}
+
+function confirm2FA() {
+  const token = document.getElementById('confirmToken').value.trim();
+  if (!token || token.length !== 6) {
+    showMessage('Enter a valid 6-digit code', 'error');
+    return;
+  }
+  
+  fetch('/api/2fa/confirm', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ token })
+  })
+    .then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error); });
+      return r.json();
+    })
+    .then(data => {
+      showMessage('2FA enabled successfully!');
+      document.getElementById('twofaQR').hidden = true;
+      
+      const codesList = document.getElementById('backupCodesList');
+      codesList.innerHTML = '';
+      data.backup_codes.forEach(code => {
+        const div = document.createElement('div');
+        div.textContent = code;
+        codesList.appendChild(div);
+      });
+      document.getElementById('backupCodes').hidden = false;
+      load2FAStatus();
+    })
+    .catch(err => {
+      showMessage(err.message || 'Invalid code', 'error');
+    });
+}
+
+function disable2FA() {
+  const password = document.getElementById('disablePassword').value;
+  if (!password) {
+    showMessage('Enter your password', 'error');
+    return;
+  }
+  
+  fetch('/api/2fa/disable', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ password })
+  })
+    .then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error); });
+      return r.json();
+    })
+    .then(() => {
+      showMessage('2FA disabled');
+      document.getElementById('disablePassword').value = '';
+      document.getElementById('backupCodes').hidden = true;
+      load2FAStatus();
+    })
+    .catch(err => {
+      showMessage(err.message || 'Failed to disable 2FA', 'error');
+    });
+}
+
+document.getElementById('configForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  
+  const config = {
+    video_device: document.getElementById('videoDevice').value.trim(),
+    hid_device: document.getElementById('hidDevice').value.trim(),
+    resolution: document.getElementById('resolution').value,
+    framerate: parseInt(document.getElementById('framerate').value, 10),
+    bitrate: document.getElementById('bitrate').value
+  };
+  
+  fetch('/api/config', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify(config)
+  })
+    .then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error); });
+      return r.json();
+    })
+    .then(() => {
+      showMessage('Configuration saved. Reconnect devices to apply changes.');
+    })
+    .catch(err => {
+      showMessage(err.message || 'Failed to save configuration', 'error');
+    });
+});
+
+/* ===== Idle Timeout ===== */
+function saveIdleTimeout() {
+  const val = parseInt(document.getElementById('idleTimeout').value, 10);
+  fetch('/api/config', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ idle_timeout: val })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => showMessage('Idle timeout saved'))
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+function loadIdleTimeout() {
+  fetch('/api/config', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(cfg => {
+      document.getElementById('idleTimeout').value = cfg.idle_timeout || 900;
+    })
+    .catch(() => {});
+}
+
+/* ===== SSL/TLS Certificates ===== */
+function loadCertInfo() {
+  fetch('/api/cert/info', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('certInfo');
+      if (!data.has_certificate) {
+        el.innerHTML = '<p>No certificate installed. Server running on HTTP.</p>';
+        return;
+      }
+      const i = data.info || {};
+      if (i.error) { el.innerHTML = '<p>Error: ' + i.error + '</p>'; return; }
+      el.innerHTML =
+        '<div class="status-row"><span class="status-dot online"></span><span class="status-label">Certificate installed' + (i.self_signed ? ' (self-signed)' : '') + '</span></div>' +
+        '<p><strong>Subject:</strong> ' + (i.subject || 'N/A') + '</p>' +
+        '<p><strong>Issuer:</strong> ' + (i.issuer || 'N/A') + '</p>' +
+        '<p><strong>Valid:</strong> ' + (i.not_before || '?') + ' — ' + (i.not_after || '?') + '</p>';
+    })
+    .catch(() => {
+      document.getElementById('certInfo').innerHTML = '<p>Unable to load certificate info.</p>';
+    });
+}
+
+function generateSelfSigned() {
+  fetch('/api/cert/generate', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ common_name: 'kvm-over-ip', days: 365 })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('Self-signed certificate generated. Restart server to use HTTPS.'); loadCertInfo(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+function uploadCert() {
+  const certFile = document.getElementById('certFile').files[0];
+  const keyFile = document.getElementById('keyFile').files[0];
+  if (!certFile || !keyFile) { showMessage('Select both cert and key files', 'error'); return; }
+  const fd = new FormData();
+  fd.append('cert', certFile);
+  fd.append('key', keyFile);
+  fetch('/api/cert/upload', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+    body: fd
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('Certificate uploaded. Restart server to use HTTPS.'); loadCertInfo(); })
+    .catch(err => showMessage(err.message || 'Upload failed', 'error'));
+}
+
+function requestLetsEncrypt() {
+  const domain = document.getElementById('leDomain').value.trim();
+  const email = document.getElementById('leEmail').value.trim();
+  if (!domain) { showMessage('Domain is required', 'error'); return; }
+  showMessage('Requesting certificate... this may take a minute.', 'success');
+  fetch('/api/cert/letsencrypt', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ domain, email })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage("Let's Encrypt certificate obtained. Restart server."); loadCertInfo(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+function deleteCert() {
+  if (!confirm('Delete the SSL certificate? Server will revert to HTTP on restart.')) return;
+  fetch('/api/cert/delete', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('Certificate deleted.'); loadCertInfo(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+/* ===== EDID Emulation ===== */
+function loadEdidStatus() {
+  fetch('/api/edid/status', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('edidStatus');
+      if (!data.supported) {
+        el.innerHTML = '<p>EDID emulation not supported for this capture device.</p>';
+        return;
+      }
+      el.innerHTML = '<p><strong>Device:</strong> ' + data.video_device +
+        '</p><p><strong>Current EDID:</strong> ' + (data.current_edid ? data.current_length + ' bytes' : 'None') + '</p>';
+
+      // Populate presets dropdown
+      const sel = document.getElementById('edidPreset');
+      sel.innerHTML = '<option value="">— Select —</option>';
+      if (data.presets) {
+        for (const [key, label] of Object.entries(data.presets)) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = label;
+          sel.appendChild(opt);
+        }
+      }
+    })
+    .catch(() => {
+      document.getElementById('edidStatus').innerHTML = '<p>Unable to load EDID status.</p>';
+    });
+}
+
+function applyEdidPreset() {
+  const preset = document.getElementById('edidPreset').value;
+  if (!preset) { showMessage('Select a preset first', 'error'); return; }
+  fetch('/api/edid/preset', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ preset })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('EDID preset applied'); loadEdidStatus(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+function uploadEdid(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  fetch('/api/edid/upload', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+    body: fd
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('EDID file uploaded'); loadEdidStatus(); })
+    .catch(err => showMessage(err.message || 'Upload failed', 'error'));
+  input.value = '';
+}
+
+function clearEdid() {
+  if (!confirm('Clear the EDID? Target may lose video output.')) return;
+  fetch('/api/edid/clear', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('EDID cleared'); loadEdidStatus(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+/* ===== OIDC / Single Sign-On ===== */
+function loadOidc() {
+  // Show the callback URL
+  const cbUrl = window.location.origin + '/auth/oidc/callback';
+  const cbEl = document.getElementById('oidcCallbackUrl');
+  if (cbEl) cbEl.textContent = cbUrl;
+
+  fetch('/api/oidc/config', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const avail = document.getElementById('oidcAvailability');
+      if (data.available === false) {
+        avail.innerHTML = '<p class="message error" style="display:block">authlib not installed. Run: <code>pip install authlib requests</code> and restart.</p>';
+      } else if (data.available) {
+        avail.innerHTML = '<p class="message success" style="display:block">authlib library installed ✓</p>';
+      }
+      document.getElementById('oidcEnabled').checked = !!data.enabled;
+      document.getElementById('oidcIssuerUrl').value = data.issuer_url || '';
+      document.getElementById('oidcClientId').value = data.client_id || '';
+      document.getElementById('oidcClientSecret').value = '';  // never pre-fill secret
+      document.getElementById('oidcScope').value = data.scope || 'openid email profile';
+      document.getElementById('oidcUsernameClaim').value = data.username_claim || 'preferred_username';
+      document.getElementById('oidcAdminClaim').value = data.admin_claim || '';
+      document.getElementById('oidcAdminClaimValue').value = data.admin_claim_value || '';
+      const groups = data.allowed_groups;
+      document.getElementById('oidcAllowedGroups').value = Array.isArray(groups) ? groups.join(', ') : (groups || '');
+    })
+    .catch(() => {});
+}
+
+function oidcPreset(type) {
+  if (type === 'authentik') {
+    document.getElementById('oidcIssuerUrl').value = 'https://sso.example.com/application/o/kvm/';
+    document.getElementById('oidcScope').value = 'openid email profile';
+    document.getElementById('oidcUsernameClaim').value = 'preferred_username';
+    document.getElementById('oidcAdminClaim').value = 'groups';
+  } else if (type === 'keycloak') {
+    document.getElementById('oidcIssuerUrl').value = 'https://sso.example.com/realms/master';
+    document.getElementById('oidcScope').value = 'openid email profile';
+    document.getElementById('oidcUsernameClaim').value = 'preferred_username';
+    document.getElementById('oidcAdminClaim').value = 'groups';
+  } else if (type === 'google') {
+    document.getElementById('oidcIssuerUrl').value = 'https://accounts.google.com';
+    document.getElementById('oidcScope').value = 'openid email profile';
+    document.getElementById('oidcUsernameClaim').value = 'email';
+    document.getElementById('oidcAdminClaim').value = '';
+  } else if (type === 'github') {
+    document.getElementById('oidcIssuerUrl').value = 'https://token.actions.githubusercontent.com';
+    document.getElementById('oidcScope').value = 'openid user:email';
+    document.getElementById('oidcUsernameClaim').value = 'sub';
+    document.getElementById('oidcAdminClaim').value = '';
+  }
+}
+
+function saveOidc() {
+  const secret = document.getElementById('oidcClientSecret').value;
+  const payload = {
+    enabled: document.getElementById('oidcEnabled').checked,
+    issuer_url: document.getElementById('oidcIssuerUrl').value.trim(),
+    client_id: document.getElementById('oidcClientId').value.trim(),
+    scope: document.getElementById('oidcScope').value.trim(),
+    username_claim: document.getElementById('oidcUsernameClaim').value.trim(),
+    admin_claim: document.getElementById('oidcAdminClaim').value.trim(),
+    admin_claim_value: document.getElementById('oidcAdminClaimValue').value.trim(),
+    allowed_groups: document.getElementById('oidcAllowedGroups').value
+      .split(',').map(s => s.trim()).filter(Boolean),
+  };
+  if (secret) payload.client_secret = secret;
+  fetch('/api/oidc/config', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify(payload)
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => showMessage('OIDC configuration saved'))
+    .catch(err => showMessage(err.message || 'Failed to save', 'error'));
+}
+
+function testOidc() {
+  const el = document.getElementById('oidcTestResult');
+  el.style.display = 'block';
+  el.className = 'message';
+  el.textContent = 'Testing discovery URL…';
+  fetch('/api/oidc/test', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+      if (ok) {
+        const info = data.info || {};
+        el.className = 'message success';
+        el.textContent = 'Discovery successful — Issuer: ' + (info.issuer || '(unknown)');
+      } else {
+        el.className = 'message error';
+        el.textContent = 'Discovery failed: ' + (data.error || 'unknown error');
+      }
+    })
+    .catch(err => {
+      el.className = 'message error';
+      el.textContent = 'Request failed: ' + err.message;
+    });
+}
+
+/* ===== Remote Syslog ===== */
+function loadSyslog() {
+  fetch('/api/syslog', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('syslogHost').value = data.host || '';
+      document.getElementById('syslogPort').value = data.port || 514;
+    })
+    .catch(() => {});
+}
+
+function saveSyslog() {
+  const host = document.getElementById('syslogHost').value.trim();
+  const port = parseInt(document.getElementById('syslogPort').value, 10);
+  fetch('/api/syslog', {
+    method: 'POST', headers: apiHeaders(),
+    body: JSON.stringify({ host, port })
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => showMessage('Syslog configuration saved'))
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+/* ===== Software Update ===== */
+function checkUpdate() {
+  document.getElementById('updateStatus').innerHTML = '<p>Checking...</p>';
+  fetch('/api/update/check', { headers: apiHeaders() })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(data => {
+      const el = document.getElementById('updateStatus');
+      if (data.updates_available) {
+        el.innerHTML = '<p><strong>' + data.pending_commits.length + ' update(s) available.</strong> Current: ' + data.current_commit + '</p>' +
+          '<ul>' + data.pending_commits.map(c => '<li>' + c + '</li>').join('') + '</ul>';
+        document.getElementById('applyUpdateBtn').hidden = false;
+      } else {
+        el.innerHTML = '<p>Up to date. Current commit: ' + data.current_commit + '</p>';
+        document.getElementById('applyUpdateBtn').hidden = true;
+      }
+    })
+    .catch(err => {
+      document.getElementById('updateStatus').innerHTML = '<p>Error: ' + (err.message || 'check failed') + '</p>';
+    });
+}
+
+function applyUpdate() {
+  if (!confirm('Apply software update? The service should be restarted afterwards.')) return;
+  document.getElementById('updateStatus').innerHTML = '<p>Applying update...</p>';
+  fetch('/api/update/apply', { method: 'POST', headers: apiHeaders() })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(data => {
+      showMessage(data.message || 'Update applied');
+      document.getElementById('updateStatus').innerHTML = '<p>' + (data.output || 'Done') + '</p>';
+      document.getElementById('applyUpdateBtn').hidden = true;
+    })
+    .catch(err => showMessage(err.message || 'Update failed', 'error'));
+}
+
+/* ===== Session Recordings ===== */
+function loadRecordings() {
+  fetch('/api/recordings', { headers: apiHeaders() })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('recordingsList');
+      if (!data.recordings || data.recordings.length === 0) {
+        el.innerHTML = '<p>No recordings found.</p>';
+        return;
+      }
+      let html = '<table class="audit-table"><thead><tr><th>ID</th><th>User</th><th>Duration</th><th>Size</th><th>Actions</th></tr></thead><tbody>';
+      data.recordings.forEach(r => {
+        const dur = r.duration_seconds ? (r.duration_seconds + 's') : 'In progress';
+        html += '<tr><td>' + r.id + '</td><td>' + (r.username || '?') + '</td><td>' + dur + '</td><td>' + (r.size_human || '?') + '</td>' +
+          '<td><button class="btn-danger" onclick="deleteRecording(\'' + r.id + '\')">Delete</button></td></tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    })
+    .catch(() => {
+      document.getElementById('recordingsList').innerHTML = '<p>Unable to load recordings.</p>';
+    });
+}
+
+function deleteRecording(id) {
+  if (!confirm('Delete recording ' + id + '?')) return;
+  fetch('/api/recordings/' + encodeURIComponent(id), {
+    method: 'DELETE', headers: apiHeaders()
+  })
+    .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
+    .then(() => { showMessage('Recording deleted'); loadRecordings(); })
+    .catch(err => showMessage(err.message || 'Failed', 'error'));
+}
+
+/* ===== Panel Switching ===== */
+const PANEL_TITLES = {
+  device: 'Device & Hardware',
+  security: 'Security',
+  session: 'Session',
+  notifications: 'Notifications',
+  network: 'Network & Authentication',
+  sso: 'Single Sign-On (OIDC)',
+  system: 'System & Maintenance'
+};
+
+const _panelLoaded = {};
+const showPanel = (window.showPanel = function(id) {
+  document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById('panel-' + id);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.settings-nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.panel === id);
+  });
+  const sub = document.querySelector('.page-subtitle');
+  if (sub && PANEL_TITLES[id]) sub.textContent = PANEL_TITLES[id];
+  history.replaceState(null, '', '#' + id);
+  // Lazy-load panel data on first visit
+  if (!_panelLoaded[id]) {
+    _panelLoaded[id] = true;
+    if (id === 'sso') loadOidc();
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  showPanel(location.hash.replace('#', '') || 'device');
+});
+
+// Init
+loadStatus();
+loadConfig();
+load2FAStatus();
+loadAuditLog();
+loadIdleTimeout();
+loadCertInfo();
+loadEdidStatus();
+loadSyslog();
+loadRecordings();
+setInterval(loadStatus, 10000);
+(function initPanels() {
+  const hash = location.hash.replace('#', '') || 'device';
+  showPanel(hash);
+})();
+</script>
+{% endblock %}
+</html>

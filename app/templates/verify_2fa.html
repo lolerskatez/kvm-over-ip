@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}2FA Verification — KVM-over-IP{% endblock %}
+
+{% block page_title %}Two-Factor Authentication{% endblock %}
+
+{% block page_subtitle %}
+<p class="page-subtitle">Verify your identity to continue</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: inherit;
+            background: var(--color-bg-primary);
+            color: var(--color-text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-lg);
+        }
+        
+        .container {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 400px;
+            padding: var(--spacing-3xl);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: var(--spacing-2xl);
+        }
+        
+        .header h1 {
+            font-size: var(--text-2xl);
+            color: var(--color-primary);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .header p {
+            color: var(--color-text-secondary);
+            font-size: var(--text-sm);
+        }
+        
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-text-primary);
+            font-weight: 500;
+            font-size: var(--text-sm);
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: var(--spacing-md);
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+            color: var(--color-text-primary);
+            transition: var(--transition-base);
+            letter-spacing: 2px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+        }
+        
+        .form-group input::placeholder {
+            letter-spacing: normal;
+            color: var(--color-text-tertiary);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            border-bottom: 2px solid var(--color-border);
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: var(--spacing-md);
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--color-text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-base);
+        }
+        
+        .tab-btn.active {
+            color: var(--color-primary);
+            border-bottom-color: var(--color-primary);
+        }
+        
+        .tab-btn:hover {
+            color: var(--color-primary);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .verify-button {
+            width: 100%;
+            padding: var(--spacing-md);
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: var(--text-base);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-base);
+        }
+        
+        .verify-button:hover {
+            filter: brightness(1.1);
+        }
+        
+        .verify-button:active {
+            filter: brightness(0.95);
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--color-danger);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-lg);
+            font-size: var(--text-sm);
+            border-left: 4px solid var(--color-danger);
+        }
+        
+        .info-text {
+            text-align: center;
+            color: var(--color-text-secondary);
+            font-size: var(--text-xs);
+            margin-top: var(--spacing-lg);
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: var(--spacing-lg);
+        }
+        
+        .back-link a {
+            color: var(--color-primary);
+            text-decoration: none;
+            font-size: var(--text-sm);
+            font-weight: 600;
+        }
+        
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .backup-input {
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: var(--spacing-2xl) var(--spacing-lg);
+                margin: var(--spacing-lg);
+            }
+
+            .header h1 {
+                font-size: var(--text-xl);
+            }
+
+            .form-group input {
+                padding: var(--spacing-lg);
+                font-size: var(--text-base);
+            }
+
+            .verify-button {
+                padding: var(--spacing-lg);
+                font-size: var(--text-base);
+                min-height: 48px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header">
+        <h1>Two-Factor Authentication</h1>
+        <p>Verify your identity to continue</p>
+    </div>
+    
+    {% if error %}
+    <div class="error-message">{{ error }}</div>
+    {% endif %}
+    
+    <form method="POST">
+        <div class="tabs">
+            <button type="button" class="tab-btn active" onclick="switchTab('authenticator')">
+                Authenticator App
+            </button>
+            <button type="button" class="tab-btn" onclick="switchTab('backup')">
+                Backup Code
+            </button>
+        </div>
+        
+        <div id="authenticator" class="tab-content active">
+            <div class="form-group">
+                <label for="token">Enter 6-digit code from your authenticator app</label>
+                <input type="text" id="token" name="token" placeholder="000000" maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+            </div>
+        </div>
+        
+        <div id="backup" class="tab-content">
+            <div class="form-group">
+                <label for="backup_code">Enter a backup code</label>
+                <input type="text" id="backup_code" name="backup_code" placeholder="XXXXXXXX" maxlength="8" class="backup-input">
+            </div>
+        </div>
+        
+        <button type="submit" class="verify-button">Verify</button>
+    </form>
+    
+    <div class="info-text">
+        <p>If you don't have access to your authenticator app, use a backup code instead.</p>
+    </div>
+    
+    <div class="back-link">
+        <a href="/login">Back to Login</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (tab === 'authenticator') {
+                document.getElementById('token').focus();
+            } else {
+                document.getElementById('backup_code').focus();
+            }
+        }
+        
+        document.getElementById('token').addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+        
+        document.getElementById('backup_code').addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/[^A-F0-9]/g, '').toUpperCase();
+        });
+    </script>
+{% endblock %}
+</html>

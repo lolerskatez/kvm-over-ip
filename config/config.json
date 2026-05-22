@@ -1,0 +1,72 @@
+{
+  "video_device": "/dev/video0",
+  "hid_device": "/dev/ttyUSB0",
+  "resolution": "1024x768",
+  "framerate": 15,
+  "bitrate": "2000k",
+  "idle_timeout": 900,
+  "pxe": {
+    "base_dir": "\\var\\lib\\kvm\\pxe",
+    "interface": "",
+    "dhcp_range": "",
+    "server_ip": "",
+    "http_port": 5000,
+    "netbootxyz_enabled": true,
+    "netbootxyz_url": "https://boot.netboot.xyz/ipxe/netboot.xyz.lkrn",
+    "netbootxyz_efi_url": "https://boot.netboot.xyz/ipxe/netboot.xyz.efi",
+    "enabled_catalog_ids": [
+      "debian_12"
+    ]
+  },
+  "recording": {
+    "recordings_dir": "/var/lib/kvm/recordings",
+    "max_recordings": 50
+  },
+  "syslog": {
+    "host": "",
+    "port": 514
+  },
+  "ip_acl": {
+    "enabled": false,
+    "mode": "whitelist",
+    "whitelist": [],
+    "blacklist": []
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_host": "",
+      "smtp_port": 587,
+      "smtp_user": "",
+      "smtp_pass": "",
+      "smtp_tls": true,
+      "from_addr": "",
+      "to_addrs": []
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "",
+      "headers": {}
+    },
+    "events": {
+      "failed_login": true,
+      "session_takeover": true,
+      "device_disconnect": true,
+      "temperature_alert": false,
+      "recording_started": false
+    },
+    "temperature_threshold": 80
+  },
+  "ldap": {
+    "enabled": false,
+    "server": "",
+    "port": 389,
+    "use_ssl": false,
+    "bind_dn": "",
+    "bind_password": "",
+    "base_dn": "",
+    "user_filter": "(uid={username})",
+    "admin_group": "",
+    "require_group": ""
+  }
+}
