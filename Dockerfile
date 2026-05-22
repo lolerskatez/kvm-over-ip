@@ -28,17 +28,10 @@ ENV CONTAINER=1
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create kvm user and group
-RUN addgroup -S kvmapp || true && adduser -S kvmapp -G kvmapp
-
 # Create necessary directories
 RUN mkdir -p /var/log/kvm-over-ip \
-    && mkdir -p /etc/kvm \
-    && chown -R kvmapp:kvmapp /app \
-    && chown -R kvmapp:kvmapp /var/log/kvm-over-ip
-
-# Switch to kvmapp user
-USER kvmapp
+    && mkdir -p /var/lib/kvm \
+    && mkdir -p /app/data
 
 # Expose ports (HTTP: 80, HTTPS: 443)
 EXPOSE 80 443
