@@ -17,7 +17,11 @@ else:
 backlog = 2048
 
 # Worker processes
-workers = max(2, multiprocessing.cpu_count() - 1)
+# Use only 1 worker in containers to avoid hardware conflicts (video/HID devices)
+if os.getenv('CONTAINER'):
+    workers = 1
+else:
+    workers = max(2, multiprocessing.cpu_count() - 1)
 worker_class = 'sync'  # Use sync for simplicity, or 'gevent' for async
 worker_connections = 1000
 timeout = 120

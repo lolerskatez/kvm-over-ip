@@ -234,7 +234,8 @@ def ip_acl_check():
 def csrf_protect():
     """Check CSRF token on state-changing requests."""
     if request.method in ('POST', 'PUT', 'DELETE'):
-        if request.path in ('/login', '/verify-2fa'):
+        # Exempt authentication and real-time control endpoints from CSRF
+        if request.path in ('/login', '/verify-2fa', '/api/mouse', '/api/keyboard'):
             return
         if not validate_csrf_token():
             return jsonify({'error': 'CSRF token missing or invalid'}), 403
