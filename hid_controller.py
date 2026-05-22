@@ -96,6 +96,7 @@ class CH9329HIDController:
             keycode: USB HID keycode (1-101)
             pressed: True for key press, False for key release
         """
+        keycode = int(keycode)
         modifier = 0x00
         reserved = 0x00
         key_array = bytes([keycode, 0, 0, 0, 0, 0])
@@ -119,6 +120,8 @@ class CH9329HIDController:
                 0x40 = Right Alt
                 0x80 = Right GUI
         """
+        keycode = int(keycode)
+        modifiers = int(modifiers)
         reserved = 0x00
         key_array = bytes([keycode, 0, 0, 0, 0, 0])
         
@@ -134,9 +137,9 @@ class CH9329HIDController:
             y: Relative Y movement (-127 to 127)
             wheel: Wheel movement (-127 to 127)
         """
-        x = max(-127, min(127, x)) & 0xFF
-        y = max(-127, min(127, y)) & 0xFF
-        wheel = max(-127, min(127, wheel)) & 0xFF
+        x = max(-127, min(127, int(x))) & 0xFF
+        y = max(-127, min(127, int(y))) & 0xFF
+        wheel = max(-127, min(127, int(wheel))) & 0xFF
         
         data = bytes([self.mouse_buttons, x, y, wheel])
         return self._send_packet(self.HID_TYPE_MOUSE, data)
