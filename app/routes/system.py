@@ -253,7 +253,7 @@ def api_wol_add_target():
         return jsonify({'error': result}), 400
     except Exception as e:
         logger.error(f"WOL add failed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to add WOL target'}), 500
 
 
 @system_bp.route('/api/wol/send', methods=['POST'])
@@ -275,7 +275,7 @@ def api_wol_send():
         return jsonify({'error': result}), 400
     except Exception as e:
         logger.error(f"WOL send failed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to send WOL packet'}), 500
 
 
 @system_bp.route('/api/wol/send-by-mac', methods=['POST'])
@@ -297,7 +297,7 @@ def api_wol_send_by_mac():
         return jsonify({'error': result}), 400
     except Exception as e:
         logger.error(f"WOL send by MAC failed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to send WOL packet'}), 500
 
 
 @system_bp.route('/api/wol/remove/<target_name>', methods=['DELETE'])
@@ -314,7 +314,7 @@ def api_wol_remove_target(target_name):
         return jsonify({'error': 'Target not found'}), 404
     except Exception as e:
         logger.error(f"WOL remove failed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to remove WOL target'}), 500
 
 
 @system_bp.route('/api/wol/schedules', methods=['GET'])

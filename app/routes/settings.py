@@ -389,7 +389,8 @@ def api_update_check():
             'current_commit': current.stdout.strip(),
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Update check failed: {e}")
+        return jsonify({'error': 'Failed to check for updates'}), 500
 
 
 @settings_bp.route('/api/update/apply', methods=['POST'])
@@ -409,7 +410,8 @@ def api_update_apply():
         logger.info(f"Software update applied by {current_user.username}: {result.stdout.strip()}")
         return jsonify({'status': 'ok', 'output': result.stdout.strip(), 'message': 'Update applied. Restart the service to activate.'})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Update apply failed: {e}")
+        return jsonify({'error': 'Failed to apply update'}), 500
 
 
 @settings_bp.route('/api/oidc/config', methods=['GET', 'POST'])
@@ -456,4 +458,5 @@ def api_oidc_test():
             return jsonify({'status': 'ok', 'metadata': resp.json()})
         return jsonify({'error': f'HTTP {resp.status_code}'}), resp.status_code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"OIDC metadata fetch failed: {e}")
+        return jsonify({'error': 'Failed to fetch OIDC metadata'}), 500

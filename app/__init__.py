@@ -232,6 +232,28 @@ def create_app(config=None):
     except Exception as e:
         logger.warning(f"Service initialization warning (routes still available): {e}")
     
+    # Global error handlers - never expose internal details
+    @app.errorhandler(404)
+    def handle_404(e):
+        logger.warning(f"404 - Resource not found: {request.path}")
+        return jsonify({'error': 'Resource not found'}), 404
+    
+    @app.errorhandler(403)
+    def handle_403(e):
+        logger.warning(f"403 - Access denied: {request.path}")
+        return jsonify({'error': 'Access denied'}), 403
+    
+    @app.errorhandler(500)
+    def handle_500(e):
+        logger.error(f"500 - Unhandled exception: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+    
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        # Catch any unhandled exceptions and log them properly
+        logger.error(f"Unhandled exception: {type(e).__name__}: {str(e)}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+    
     # Initialize data migration
     ensure_password_change_flag()
     
@@ -258,4 +280,7 @@ if __name__ == '__main__':
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     app = create_app()
-    app.run(debug=True)
+    # Never use debug=True in production - it exposes tracebacks!
+    # Only enable in development with explicit env variable
+    debug_mode = os.getenv('FLASK_ENV') == 'development' and os.getenv('FLASK_DEBUG') == '1'
+    app.run(debug=debug_mode, host='127.0.0.1', port=5000)
