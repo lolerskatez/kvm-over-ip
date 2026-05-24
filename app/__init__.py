@@ -204,6 +204,7 @@ def create_app(config=None):
         from app.services.pxe.pxe_server import PXEServer
         from app.services.audit.audit_log import AuditLog
         from app.services.audit.session_recorder import SessionRecorder
+        from app.services.webrtc.signaling import WebRTCSignalingServer
         
         # Initialize services with minimal args
         hid = CH9329HIDController()
@@ -211,7 +212,8 @@ def create_app(config=None):
         edid = EDIDManager()
         recorder = SessionRecorder()
         audit = AuditLog()
-        init_hardware_services(hid=hid, video=video, edid=edid, recorder=recorder, audit=audit)
+        webrtc = WebRTCSignalingServer()
+        init_hardware_services(hid=hid, video=video, edid=edid, recorder=recorder, audit=audit, webrtc=webrtc)
         
         sys_mon = SystemMonitor()
         cert_mgr = CertManager()

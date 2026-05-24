@@ -22,16 +22,18 @@ video_streamer = None
 edid_manager = None
 session_recorder = None
 audit_log = None
+webrtc_signaling = None
 
 
-def init_hardware_services(hid=None, video=None, edid=None, recorder=None, audit=None):
+def init_hardware_services(hid=None, video=None, edid=None, recorder=None, audit=None, webrtc=None):
     """Initialize hardware services."""
-    global hid_controller, video_streamer, edid_manager, session_recorder, audit_log
+    global hid_controller, video_streamer, edid_manager, session_recorder, audit_log, webrtc_signaling
     hid_controller = hid
     video_streamer = video
     edid_manager = edid
     session_recorder = recorder
     audit_log = audit
+    webrtc_signaling = webrtc
     sock.init_app(None)  # Will be properly initialized in app factory
 
 
@@ -276,3 +278,158 @@ def api_edid_clear():
     if result is True:
         return jsonify({'status': 'ok'})
     return jsonify({'error': result}), 400
+
+
+# ═══════════════════════════════════════════════════════════
+# WebRTC Routes
+# ═══════════════════════════════════════════════════════════
+
+@hardware_bp.route('/api/webrtc/offer', methods=['POST'])
+@login_required
+@require_kvm_access
+def api_webrtc_offer():
+    """Handle WebRTC SDP offer from client and return answer."""
+    if not webrtc_signaling:
+        return jsonify({'error': 'WebRTC service not available'}), 503
+    
+    data = request.get_json()
+    if not data or 'sdp' not in data or 'type' not in data:
+        return jsonify({'error': 'Missing SDP offer'}), 400
+    
+    client_ip = get_client_ip()
+    
+    try:
+        # Create peer connection and handle offer
+        result = webrtc_signaling.handle_offer(
+            username=current_user.username,
+            client_ip=client_ip,
+            sdp=data['sdp'],
+            sdp_type=data['type']
+        )
+        
+        if 'error' in result:
+            return jsonify(result), 400
+        
+        # Log WebRTC session start
+        if audit_log:
+            audit_log.log_action(
+                username=current_user.username,
+                action='webrtc_session_start',
+                ip=client_ip,
+                details={'session_id': result.get('session_id')}
+            )
+        
+        logger.info(f"WebRTC session started for {current_user.username} from {client_ip}")
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"WebRTC offer handling failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to process offer'}), 500
+
+
+@hardware_bp.route('/api/webrtc/ice-candidate', methods=['POST'])
+@login_required
+@require_kvm_access
+def api_webrtc_ice_candidate():
+    """Handle ICE candidate from client."""
+    if not webrtc_signaling:
+        return jsonify({'error': 'WebRTC service not available'}), 503
+    
+    data = request.get_json()
+    if not data or 'session_id' not in data or 'candidate' not in data:
+        return jsonify({'error': 'Missing session_id or candidate'}), 400
+    
+    try:
+        result = webrtc_signaling.handle_ice_candidate(
+            session_id=data['session_id'],
+            candidate=data['candidate'],
+            sdp_mid=data.get('sdpMid'),
+            sdp_mline_index=data.get('sdpMLineIndex')
+        )
+        
+        if 'error' in result:
+            return jsonify(result), 400
+        
+        return jsonify({'status': 'ok'})
+    
+    except Exception as e:
+        logger.error(f"ICE candidate handling failed: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to process ICE candidate'}), 500
+
+
+@hardware_bp.route('/api/webrtc/stats', methods=['GET'])
+@login_required
+def api_webrtc_stats():
+    """Get WebRTC session statistics."""
+    if not webrtc_signaling:
+        return jsonify({'error': 'WebRTC service not available'}), 503
+    
+    session_id = request.args.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'Missing session_id parameter'}), 400
+    
+    try:
+        # Get peer info for this session
+        peer_info = webrtc_signaling.get_peer_info(session_id)
+        
+        if not peer_info:
+            return jsonify({'error': 'Session not found'}), 404
+        
+        # Build stats response
+        stats = {
+            'session_id': session_id,
+            'state': peer_info.get('state'),
+            'username': peer_info.get('username'),
+            'created_at': peer_info.get('created_at').isoformat() if peer_info.get('created_at') else None,
+            'encoder': {
+                'name': 'H.264',  # TODO: Get from video track
+                'type': 'hardware'  # TODO: Get from encoder detector
+            },
+            'bitrate_kbps': 5000,  # TODO: Get actual bitrate from video track
+            'resolution': {
+                'width': 1920,  # TODO: Get from config or video track
+                'height': 1080
+            },
+            'fps': 30  # TODO: Get from config or video track
+        }
+        
+        return jsonify(stats)
+    
+    except Exception as e:
+        logger.error(f"Failed to get WebRTC stats: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to retrieve stats'}), 500
+
+
+@hardware_bp.route('/api/webrtc/close', methods=['POST'])
+@login_required
+def api_webrtc_close():
+    """Close a WebRTC peer connection."""
+    if not webrtc_signaling:
+        return jsonify({'error': 'WebRTC service not available'}), 503
+    
+    data = request.get_json()
+    session_id = data.get('session_id') if data else None
+    
+    if not session_id:
+        return jsonify({'error': 'Missing session_id'}), 400
+    
+    try:
+        result = webrtc_signaling.close_peer_connection(session_id)
+        
+        # Log session end
+        if audit_log:
+            audit_log.log_action(
+                username=current_user.username,
+                action='webrtc_session_end',
+                ip=get_client_ip(),
+                details={'session_id': session_id}
+            )
+        
+        logger.info(f"WebRTC session {session_id} closed by {current_user.username}")
+        
+        return jsonify({'status': 'ok'})
+    
+    except Exception as e:
+        logger.error(f"Failed to close WebRTC session: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to close session'}), 500

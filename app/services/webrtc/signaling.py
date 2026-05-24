@@ -153,9 +153,9 @@ class WebRTCSignalingServer:
             
             if pc.connectionState == "failed":
                 self.failed_connections += 1
-                await self.close_peer_connection(peer_id)
+                await self._async_close_peer_connection(peer_id)
             elif pc.connectionState == "closed":
-                await self.close_peer_connection(peer_id)
+                await self._async_close_peer_connection(peer_id)
         
         @pc.on("iceconnectionstatechange")
         async def on_iceconnectionstatechange():
@@ -166,47 +166,6 @@ class WebRTCSignalingServer:
         )
         
         return peer_id
-    
-    async def handle_offer(
-        self,
-        peer_id: str,
-        offer_sdp: str,
-        offer_type: str = 'offer'
-    ) -> dict:
-        """
-        Handle SDP offer from client.
-        
-        Args:
-            peer_id: Peer connection ID
-            offer_sdp: SDP offer string
-            offer_type: SDP type (usually 'offer')
-        
-        Returns:
-            Dictionary with answer SDP
-        """
-        if peer_id not in self.peer_connections:
-            raise ValueError(f"Peer connection {peer_id} not found")
-        
-        pc = self.peer_connections[peer_id]
-        
-        # Create RTCSessionDescription from offer
-        offer = RTCSessionDescription(sdp=offer_sdp, type=offer_type)
-        
-        # Set remote description
-        await pc.setRemoteDescription(offer)
-        
-        # Create answer
-        answer = await pc.createAnswer()
-        
-        # Set local description
-        await pc.setLocalDescription(answer)
-        
-        logger.info(f"Processed SDP offer/answer for peer {peer_id[:8]}")
-        
-        return {
-            'sdp': pc.localDescription.sdp,
-            'type': pc.localDescription.type
-        }
     
     async def handle_ice_candidate(
         self,
@@ -237,45 +196,12 @@ class WebRTCSignalingServer:
         
         logger.debug(f"Added ICE candidate for peer {peer_id[:8]}")
     
-    async def close_peer_connection(self, peer_id: str):
-        """
-        Close peer connection and clean up resources.
-        
-        Args:
-            peer_id: Peer connection ID
-        """
-        if peer_id not in self.peer_connections:
-            return
-        
-        logger.info(f"Closing peer connection {peer_id[:8]}")
-        
-        # Close data channel
-        if peer_id in self.data_channels:
-            del self.data_channels[peer_id]
-        
-        # Stop video track
-        if peer_id in self.active_tracks:
-            track = self.active_tracks[peer_id]
-            await track.stop()
-            del self.active_tracks[peer_id]
-        
-        # Close peer connection
-        pc = self.peer_connections[peer_id]
-        await pc.close()
-        
-        # Remove from tracking
-        del self.peer_connections[peer_id]
-        if peer_id in self.peer_info:
-            del self.peer_info[peer_id]
-        
-        logger.info(f"Peer connection {peer_id[:8]} closed")
-    
     async def close_all_connections(self):
         """Close all active peer connections."""
         peer_ids = list(self.peer_connections.keys())
         
         for peer_id in peer_ids:
-            await self.close_peer_connection(peer_id)
+            await self._async_close_peer_connection(peer_id)
         
         logger.info("All peer connections closed")
     
@@ -324,3 +250,202 @@ class WebRTCSignalingServer:
             'failed_connections': self.failed_connections,
             'peers': self.get_all_peers()
         }
+    
+    # ═══════════════════════════════════════════════════════════
+    # Synchronous Wrappers for Flask Routes
+    # ═══════════════════════════════════════════════════════════
+    
+    def handle_offer(self, username: str, client_ip: str, sdp: str, sdp_type: str = 'offer') -> dict:
+        """
+        Synchronous wrapper for handling SDP offer from client.
+        
+        Creates a new peer connection, processes the offer, and returns the answer.
+        
+        Args:
+            username: Username of the client
+            client_ip: Client IP address
+            sdp: SDP offer string
+            sdp_type: SDP type (usually 'offer')
+        
+        Returns:
+            Dictionary with session_id and SDP answer, or error
+        """
+        try:
+            # Create event loop if needed
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Create peer connection and handle offer
+            async def _handle():
+                peer_id = await self.create_peer_connection(username, client_ip)
+                answer = await self._async_handle_offer(peer_id, sdp, sdp_type)
+                return {'session_id': peer_id, **answer}
+            
+            if loop.is_running():
+                # If loop is already running (e.g., in async context), create task
+                future = asyncio.ensure_future(_handle(), loop=loop)
+                # Wait for completion (this is blocking, but necessary for sync API)
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    result = executor.submit(asyncio.run, _handle()).result()
+                return result
+            else:
+                return loop.run_until_complete(_handle())
+        
+        except Exception as e:
+            logger.error(f"Error handling offer: {e}", exc_info=True)
+            return {'error': str(e)}
+    
+    async def _async_handle_offer(self, peer_id: str, offer_sdp: str, offer_type: str = 'offer') -> dict:
+        """Internal async handler for SDP offer."""
+        if peer_id not in self.peer_connections:
+            raise ValueError(f"Peer connection {peer_id} not found")
+        
+        pc = self.peer_connections[peer_id]
+        
+        # Create RTCSessionDescription from offer
+        offer = RTCSessionDescription(sdp=offer_sdp, type=offer_type)
+        
+        # Set remote description
+        await pc.setRemoteDescription(offer)
+        
+        # Create answer
+        answer = await pc.createAnswer()
+        
+        # Set local description
+        await pc.setLocalDescription(answer)
+        
+        logger.info(f"Processed SDP offer/answer for peer {peer_id[:8]}")
+        
+        return {
+            'sdp': pc.localDescription.sdp,
+            'type': pc.localDescription.type
+        }
+    
+    def handle_ice_candidate(self, session_id: str, candidate: str, sdp_mid: str = None, sdp_mline_index: int = None) -> dict:
+        """
+        Synchronous wrapper for handling ICE candidate.
+        
+        Args:
+            session_id: Session/peer ID
+            candidate: ICE candidate string
+            sdp_mid: SDP media ID
+            sdp_mline_index: SDP media line index
+        
+        Returns:
+            Dictionary with status or error
+        """
+        try:
+            # Create event loop if needed
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            async def _handle():
+                return await self._async_handle_ice_candidate(session_id, candidate, sdp_mid, sdp_mline_index)
+            
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    result = executor.submit(asyncio.run, _handle()).result()
+                return result
+            else:
+                return loop.run_until_complete(_handle())
+        
+        except Exception as e:
+            logger.error(f"Error handling ICE candidate: {e}", exc_info=True)
+            return {'error': str(e)}
+    
+    async def _async_handle_ice_candidate(
+        self,
+        peer_id: str,
+        candidate: str,
+        sdp_mid: str = None,
+        sdp_mline_index: int = None
+    ) -> dict:
+        """Internal async handler for ICE candidate."""
+        if peer_id not in self.peer_connections:
+            return {'error': f'Session {peer_id} not found'}
+        
+        pc = self.peer_connections[peer_id]
+        
+        # Create RTCIceCandidate
+        ice_candidate = RTCIceCandidate(
+            candidate=candidate,
+            sdpMid=sdp_mid,
+            sdpMLineIndex=sdp_mline_index
+        )
+        
+        # Add ICE candidate
+        await pc.addIceCandidate(ice_candidate)
+        
+        logger.debug(f"Added ICE candidate for peer {peer_id[:8]}")
+        
+        return {'status': 'ok'}
+    
+    def close_peer_connection(self, session_id: str) -> dict:
+        """
+        Synchronous wrapper for closing a peer connection.
+        
+        Args:
+            session_id: Session/peer ID to close
+        
+        Returns:
+            Dictionary with status
+        """
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            async def _handle():
+                await self._async_close_peer_connection(session_id)
+                return {'status': 'ok'}
+            
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    result = executor.submit(asyncio.run, _handle()).result()
+                return result
+            else:
+                return loop.run_until_complete(_handle())
+        
+        except Exception as e:
+            logger.error(f"Error closing peer connection: {e}", exc_info=True)
+            return {'error': str(e)}
+    
+    async def _async_close_peer_connection(self, peer_id: str):
+        """Internal async handler for closing peer connection."""
+        if peer_id not in self.peer_connections:
+            logger.warning(f"Peer connection {peer_id} not found (already closed?)")
+            return
+        
+        logger.info(f"Closing peer connection {peer_id[:8]}")
+        
+        # Close data channel
+        if peer_id in self.data_channels:
+            del self.data_channels[peer_id]
+        
+        # Stop video track
+        if peer_id in self.active_tracks:
+            track = self.active_tracks[peer_id]
+            await track.stop()
+            del self.active_tracks[peer_id]
+        
+        # Close peer connection
+        pc = self.peer_connections[peer_id]
+        await pc.close()
+        
+        # Remove from tracking
+        del self.peer_connections[peer_id]
+        if peer_id in self.peer_info:
+            del self.peer_info[peer_id]
+        
+        logger.info(f"Peer connection {peer_id[:8]} closed")

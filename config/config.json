@@ -4,6 +4,7 @@
   "resolution": "1024x768",
   "framerate": 15,
   "bitrate": "2000k",
+  "streaming_mode": "webrtc",
   "idle_timeout": 900,
   "pxe": {
     "base_dir": "\\var\\lib\\kvm\\pxe",

@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}WebRTC Console — KVM-over-IP{% endblock %}
+
+{% block extra_css %}<style>
+  /* ── Viewport fill ─────────────────────────────────── */
+  .main    { overflow: hidden !important; }
+  .content { overflow: hidden !important; flex: 1; }
+  .page-body {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Console layout ─────────────────────────────────── */
+  .console-wrap {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .console-video {
+    flex: 3;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .console-video video {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .console-video.fullscreen {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+  }
+
+  .console-video.pointer-locked { cursor: none; }
+
+  /* ── Video overlay (loading/status) ─────────────────── */
+  .video-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: var(--text-lg);
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .video-overlay.hidden { opacity: 0; }
+
+  /* ── Controls panel ─────────────────────────────────── */
+  .console-controls {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--color-bg-secondary);
+    border-left: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .ctrl-section {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .ctrl-section:last-child { border-bottom: none; }
+
+  .ctrl-title {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  /* ── Key grids ──────────────────────────────────────── */
+  .key-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xs);
+  }
+
+  .fkey-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  /* ── Connection status ──────────────────────────────── */
+  .quality-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--spacing-md);
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .qi-val  { font-weight: 700; color: var(--color-text-secondary); }
+  .qi-good { color: var(--color-success); }
+  .qi-warn { color: var(--color-warning); }
+  .qi-bad  { color: var(--color-danger); }
+
+  .conn-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs) var(--spacing-sm);
+    align-items: center;
+  }
+
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    gap: 5px;
+  }
+
+  .status-indicator::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-indicator.status-ok::before {
+    background: var(--color-success);
+  }
+
+  .status-indicator.status-warning::before {
+    background: var(--color-warning);
+  }
+
+  .status-indicator.status-error::before {
+    background: var(--color-danger);
+  }
+
+  .status-indicator.status-ok {
+    background: rgba(var(--color-success-rgb, 34, 197, 94), 0.1);
+    color: var(--color-success);
+  }
+
+  .status-indicator.status-warning {
+    background: rgba(var(--color-warning-rgb, 251, 191, 36), 0.1);
+    color: var(--color-warning);
+  }
+
+  .status-indicator.status-error {
+    background: rgba(var(--color-danger-rgb, 239, 68, 68), 0.1);
+    color: var(--color-danger);
+  }
+
+  /* ── Latency display ────────────────────────────────── */
+  .latency-stats {
+    font-size: var(--text-xs);
+    font-family: var(--font-mono);
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .latency-good { color: var(--color-success); }
+  .latency-ok { color: var(--color-warning); }
+  .latency-poor { color: var(--color-danger); }
+
+  /* ── Text send ──────────────────────────────────────── */
+  .send-row { display: flex; gap: var(--spacing-xs); }
+  .send-row input { flex: 1; padding: 5px var(--spacing-sm); font-size: var(--text-sm); }
+
+  /* ── Mobile ─────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .console-wrap { flex-direction: column; }
+    .console-video { min-height: 40%; flex: none; }
+    .console-controls {
+      width: 100%;
+      height: auto;
+      border-left: none;
+      border-top: 1px solid var(--color-border);
+    }
+  }
+</style>{% endblock %}
+
+{% block content %}
+<div class="page-body">
+  <div class="console-wrap">
+    <!-- Video Display -->
+    <div class="console-video" id="video-container">
+      <video 
+        id="video-stream" 
+        autoplay 
+        playsinline 
+        muted
+        style="width: 100%; height: 100%; object-fit: contain;"
+      ></video>
+      <div class="video-overlay" id="video-overlay">
+        <span>Connecting to WebRTC stream...</span>
+      </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="console-controls">
+      <!-- Connection Status -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">WebRTC Connection</div>
+        <div class="conn-bar">
+          <div class="status-indicator status-warning" id="connection-status">
+            <span id="status-text">Connecting...</span>
+          </div>
+        </div>
+        <div class="latency-stats" id="latency-stats">
+          Latency: -- ms
+        </div>
+        <div style="margin-top: var(--spacing-sm);">
+          <button class="btn btn-sm btn-outline" id="reconnect-btn">
+            Reconnect
+          </button>
+        </div>
+      </div>
+
+      <!-- Stream Info -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">Stream Info</div>
+        <div class="quality-bar">
+          <div id="resolution-info">Resolution: --</div>
+          <div id="encoder-info">Encoder: --</div>
+          <div id="bitrate-info">Bitrate: --</div>
+        </div>
+      </div>
+
+      <!-- Special Keys -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">Special Keys</div>
+        <div class="key-grid">
+          <button class="btn btn-sm special-key-btn" data-action="ctrl-alt-del">
+            Ctrl+Alt+Del
+          </button>
+          <button class="btn btn-sm special-key-btn" data-key="0x29">
+            Esc
+          </button>
+          <button class="btn btn-sm special-key-btn" data-key="0x2B">
+            Tab
+          </button>
+          <button class="btn btn-sm special-key-btn" data-key="0xE3">
+            Win
+          </button>
+        </div>
+        
+        <div style="margin-top: var(--spacing-sm);">
+          <div class="fkey-grid">
+            <button class="btn btn-xs special-key-btn" data-key="0x3A">F1</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x3B">F2</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x3C">F3</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x3D">F4</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x3E">F5</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x3F">F6</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x40">F7</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x41">F8</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x42">F9</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x43">F10</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x44">F11</button>
+            <button class="btn btn-xs special-key-btn" data-key="0x45">F12</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Virtual Mouse Buttons -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">Virtual Mouse</div>
+        <div class="key-grid">
+          <button class="btn btn-sm" id="mouse-left">Left Click</button>
+          <button class="btn btn-sm" id="mouse-right">Right Click</button>
+          <button class="btn btn-sm" id="mouse-middle">Middle Click</button>
+        </div>
+      </div>
+
+      <!-- Text Paste -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">Paste Text</div>
+        <div class="send-row">
+          <input 
+            type="text" 
+            id="text-input" 
+            class="input" 
+            placeholder="Type text to send..."
+          />
+          <button class="btn btn-sm btn-primary" id="send-text-btn">
+            Send
+          </button>
+        </div>
+        <p style="font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: var(--spacing-xs);">
+          Enter text and click Send to type it on the remote system.
+        </p>
+      </div>
+
+      <!-- Mode Selection -->
+      <div class="ctrl-section">
+        <div class="ctrl-title">Streaming Mode</div>
+        <div style="display: flex; gap: var(--spacing-xs);">
+          <a href="{{ url_for('console.console_mjpeg') }}" class="btn btn-sm btn-outline" style="flex: 1;">
+            Switch to MJPEG
+          </a>
+        </div>
+        <p style="font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: var(--spacing-xs);">
+          Currently using: <strong>WebRTC</strong> (low latency)
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='webrtc-console.js') }}"></script>
+{% endblock %}
