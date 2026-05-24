@@ -1,0 +1,106 @@
+services:
+  kvm-over-ip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kvm-over-ip
+    restart: unless-stopped
+    
+    ports:
+      - "80:8000"
+    
+    volumes:
+      # Application logs
+      - kvm-logs:/var/log/kvm-over-ip
+      
+      # Session and config data (persistent)
+      - kvm-data:/var/lib/kvm
+      
+      # DRI devices for VA-API hardware encoding (read-only)
+      - /dev/dri:/dev/dri:ro
+    
+    # USB and video device access
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+      - /dev/video0:/dev/video0     # Video capture device
+      - /dev/ttyUSB0:/dev/ttyUSB0   # HID serial device
+    
+    # Security configuration - PRIVILEGED MODE REMOVED
+    # Add only required capabilities instead of full privileged access
+    cap_add:
+      - SYS_RAWIO          # Required for V4L2 ioctl operations
+      - NET_BIND_SERVICE   # Allow binding to port 80 (optional if using 8000+)
+    
+    # Drop all capabilities not explicitly needed
+    cap_drop:
+      - ALL
+    
+    # Add seccomp profile for syscall filtering
+    security_opt:
+      - seccomp=deployment/seccomp-kvm.json
+      - no-new-privileges:true
+    
+    # Read-only root filesystem (with writable tmpfs mounts)
+    # Note: Disabled for now - enable after testing
+    # read_only: true
+    # tmpfs:
+    #   - /tmp
+    #   - /var/run
+    #   - /app/.cache
+    
+    environment:
+      # Container flag
+      - CONTAINER=1
+      
+      # Production mode
+      - PRODUCTION=1
+      
+      # Flask configuration
+      - FLASK_ENV=production
+      
+      # WebRTC configuration
+      - STREAMING_MODE=webrtc  # Options: mjpeg, webrtc
+      - PREFER_HARDWARE_ENCODING=true
+      
+      # VA-API configuration for hardware encoding
+      - LIBVA_DRIVER_NAME=iHD
+      - LIBVA_DRIVERS_PATH=/usr/lib/dri
+      
+      # Set SECRET_KEY for production (uncomment and change)
+      # - SECRET_KEY=your-long-random-secret-key-here
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'           # Max 4 CPU cores
+          memory: 2G          # 2GB memory limit
+        reservations:
+          cpus: '2'           # Reserve 2 cores
+          memory: 1G          # Reserve 1GB
+    
+    # CPU pinning for reduced latency (optional - adjust core numbers)
+    # cpuset: "2,3,4,5"
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+# Named volumes for persistent data
+volumes:
+  kvm-logs:
+    driver: local
+  kvm-data:
+    driver: local
+
+# Network configuration (optional)
+# networks:
+#   kvm-network:
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 172.20.0.0/16

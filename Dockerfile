@@ -12,7 +12,19 @@ RUN apk update && apk add --no-cache \
     linux-headers \
     build-base \
     curl \
-    pkgconf
+    pkgconf \
+    libva \
+    libva-dev \
+    libva-intel-driver \
+    mesa-va-gallium \
+    v4l-utils \
+    v4l-utils-dev \
+    libvpx \
+    libvpx-dev \
+    opus \
+    opus-dev \
+    libsrtp \
+    libsrtp-dev
 
 # Create app directory
 WORKDIR /app
@@ -25,6 +37,11 @@ COPY . .
 RUN python3 -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 ENV CONTAINER=1
+
+# Set environment variables for VA-API
+ENV LIBVA_DRIVER_NAME=iHD
+ENV LIBVA_DRIVERS_PATH=/usr/lib/dri
+
 RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -33,9 +50,10 @@ RUN mkdir -p /var/log/kvm-over-ip \
     && mkdir -p /var/lib/kvm \
     && mkdir -p /app/data
 
-# Add root user to video group for V4L2 device access
-# (video group already exists in Alpine base image)
+# Add root user to video and render groups for hardware access
 RUN adduser root video 2>/dev/null || true
+RUN addgroup render 2>/dev/null || true
+RUN adduser root render 2>/dev/null || true
 
 # Expose port
 EXPOSE 8000
